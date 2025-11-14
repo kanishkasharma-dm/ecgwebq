@@ -107,6 +107,48 @@ export function AnalysisSection() {
               Reference templates keep clinicians aligned on morphology decisions
             </p>
           </motion.div>
+
+          <motion.div
+            className="rounded-3xl border-2 border-brand-electric/50 bg-gradient-to-br from-brand-electric/10 via-brand-orange/5 to-transparent p-6 shadow-glow"
+            initial={{ opacity: 0, y: 40 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.8, delay: 0.2 }}
+            viewport={{ once: true, amount: 0.3 }}
+          >
+            <div className="mb-3 flex items-center gap-2">
+              <Badge className="bg-brand-electric/20 text-brand-electric uppercase tracking-[0.3em]">
+                Core Algorithms
+              </Badge>
+            </div>
+            <h4 className="font-display text-xl text-white">Advanced Signal Processing</h4>
+            <p className="mt-3 text-sm text-white/80">
+              Uses advanced signal processing to automatically detect heartbeats, filter noise,
+              and identify irregular rhythms. Adapts to different heart rates and provides stable,
+              accurate readings.
+            </p>
+            <div className="mt-5 space-y-3 text-xs text-white/70">
+              <div className="rounded-xl border border-white/10 bg-white/5 px-4 py-2.5">
+                <span className="font-semibold text-brand-electric">Pan-Tompkins QRS Detection:</span>{" "}
+                Industry-standard algorithm with bandpass filtering, differentiation, and adaptive peak detection
+              </div>
+              <div className="rounded-xl border border-white/10 bg-white/5 px-4 py-2.5">
+                <span className="font-semibold text-brand-electric">Multi-Strategy Detection:</span>{" "}
+                Automatically selects optimal strategy (Conservative 40–120 BPM, Normal 100–180 BPM, Tight 160–300 BPM)
+              </div>
+              <div className="rounded-xl border border-white/10 bg-white/5 px-4 py-2.5">
+                <span className="font-semibold text-brand-electric">Butterworth Filtering:</span>{" "}
+                4th-order bandpass filter (0.5–40 Hz) removes noise and baseline wander
+              </div>
+              <div className="rounded-xl border border-white/10 bg-white/5 px-4 py-2.5">
+                <span className="font-semibold text-brand-electric">Statistical Arrhythmia Detection:</span>{" "}
+                Atrial fibrillation, ventricular tachycardia, PVCs, bradycardia/tachycardia, and normal sinus rhythm analysis
+              </div>
+              <div className="rounded-xl border border-white/10 bg-white/5 px-4 py-2.5">
+                <span className="font-semibold text-brand-electric">PQRST Wave Detection:</span>{" "}
+                Identifies all ECG waveform components with QRS axis calculation using Lead I and aVF vectors
+              </div>
+            </div>
+          </motion.div>
         </div>
 
         <div className="space-y-6">
