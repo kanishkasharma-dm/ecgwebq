@@ -1,6 +1,5 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useLocation } from "react-router-dom";
-import { Analytics } from "@vercel/analytics/react";
 import { Navbar } from "@/components/Navbar";
 import { Hero } from "@/sections/Hero";
 import { Features } from "@/sections/Features";
@@ -13,6 +12,8 @@ import { AdminSection } from "@/sections/AdminSection";
 import { SupportSection } from "@/sections/SupportSection";
 import { CtaSection } from "@/sections/CtaSection";
 import { Footer } from "@/components/Footer";
+import { ChristmasPopup } from "@/components/ChristmasPopup";
+import { Snowfall } from "@/components/Snowfall";
 
 function ScrollToHash() {
   const { hash } = useLocation();
@@ -30,6 +31,8 @@ function ScrollToHash() {
 export default function App() {
   return (
     <>
+      <Snowfall enabled={true} snowflakeCount={60} />
+      <ChristmasPopup onClose={() => {}} />
       <Navbar />
       <main className="flex flex-col gap-6">
         <ScrollToHash />
@@ -45,7 +48,6 @@ export default function App() {
         <CtaSection />
       </main>
       <Footer />
-      <Analytics />
     </>
   );
 }

@@ -2,6 +2,7 @@ import { motion } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
+import { CardioX3DModel } from "@/components/CardioX3DModel";
 
 export function Hero() {
   return (
@@ -42,6 +43,20 @@ export function Hero() {
             Download Brochure
           </Button>
         </div>
+
+        <motion.div
+          className="relative mt-12 w-full max-w-5xl"
+          initial={{ opacity: 0, scale: 0.9 }}
+          animate={{ opacity: 1, scale: 1 }}
+          transition={{ duration: 1, delay: 0.5 }}
+        >
+          <div className="relative overflow-hidden rounded-3xl border border-white/20 bg-gradient-to-br from-black/60 via-slate-900/60 to-black/60 p-8 shadow-2xl backdrop-blur-xl">
+            <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,_rgba(255,138,61,0.1),transparent)]" />
+            <div className="relative h-[500px] w-full md:h-[600px]">
+              <CardioX3DModel className="rounded-2xl" />
+            </div>
+          </div>
+        </motion.div>
 
         <div className="relative mt-16 w-full max-w-4xl rounded-3xl border border-white/10 bg-white/5 p-6 backdrop-blur-2xl">
           <div className="grid gap-6 md:grid-cols-[1.2fr_1fr] md:gap-8">
