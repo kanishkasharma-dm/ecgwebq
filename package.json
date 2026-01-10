@@ -21,6 +21,7 @@
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "react-router-dom": "^6.30.2",
+    "recharts": "^3.6.0",
     "tailwind-merge": "^2.5.3",
     "three": "^0.182.0"
   },
