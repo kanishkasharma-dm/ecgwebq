@@ -62,7 +62,7 @@ export default function CPAPLogin() {
                 }}
                 className="focus:outline-none focus:ring-2 focus:ring-teal-500/40 rounded-lg"
                 aria-label="Toggle theme"
-              >
+              > 
                 <img src={deckmountLogo} alt="DeckMount" className="h-6 w-auto" />
               </button>
             </div>

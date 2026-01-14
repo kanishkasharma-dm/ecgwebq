@@ -26,9 +26,13 @@ export interface APIResponse<T = any> {
 
 /**
  * Get authentication token from storage
+ * Checks both 'token' and 'authToken' for compatibility
  */
 function getAuthToken(): string | null {
-  return localStorage.getItem('authToken') || sessionStorage.getItem('authToken');
+  return localStorage.getItem('token') || 
+         localStorage.getItem('authToken') || 
+         sessionStorage.getItem('token') || 
+         sessionStorage.getItem('authToken');
 }
 
 /**

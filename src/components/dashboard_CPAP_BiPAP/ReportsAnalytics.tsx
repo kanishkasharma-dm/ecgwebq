@@ -194,7 +194,7 @@ export default function ReportsAnalytics() {
                 </BarChart>
               </ResponsiveContainer>
             </div>
-          </motion.div>
+           </motion.div>
           <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className={`rounded-3xl p-6 shadow-sm border ${isDarkMode ? "bg-slate-800 border-slate-700" : "bg-white border-slate-100"}`}>
             <div className="flex items-center gap-2 mb-4">
               <LineChart size={18} className="text-teal-500" />
