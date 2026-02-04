@@ -25,17 +25,18 @@ export default function LoginPage() {
       return;
     }
 
-    // TEMP AUTH (backend later)
-    localStorage.setItem("role", role);
-    localStorage.setItem("token", "dummy-token");
+  // TEMP AUTH (backend later)
+  localStorage.setItem("role", role);
+  localStorage.setItem("token", "dummy-token");
 
-    // Redirect based on role
-    if (role === "admin") {
-      localStorage.setItem("admin_logged_in", "true");
-      navigate("/artists");
-    } else if (role === "doctor") {
-      navigate("/dashboard");
-    }
+  // Redirect based on role
+  if (role === "admin") {
+    localStorage.setItem("admin_logged_in", "true");
+    navigate("/artists");
+  } else if (role === "doctor") {
+    localStorage.setItem("doctor_logged_in", "true");
+    navigate("/doctor");
+  }
   };
 
   const loginBoxes = [
@@ -123,6 +124,12 @@ export default function LoginPage() {
                           username: e.target.value,
                         })
                       }
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          const passwordInput = e.currentTarget.parentElement?.nextElementSibling?.querySelector('input') as HTMLInputElement;
+                          passwordInput?.focus();
+                        }
+                      }}
                       className="w-full pl-10 pr-4 py-3 border-2 border-gray-200 rounded-xl focus:border-brand-orange focus:ring-2 focus:ring-brand-orange/20 focus:outline-none transition-all duration-200 bg-white text-gray-900 placeholder:text-gray-400"
                     />
                   </div>
@@ -140,6 +147,15 @@ export default function LoginPage() {
                           password: e.target.value,
                         })
                       }
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          handleLogin(
+                            box.role,
+                            box.credentials.username,
+                            box.credentials.password
+                          );
+                        }
+                      }}
                       className="w-full pl-10 pr-12 py-3 border-2 border-gray-200 rounded-xl focus:border-brand-orange focus:ring-2 focus:ring-brand-orange/20 focus:outline-none transition-all duration-200 bg-white text-gray-900 placeholder:text-gray-400"
                     />
                     <button

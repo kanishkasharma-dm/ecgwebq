@@ -30,28 +30,36 @@ export default function AddUserModal({ isOpen, onClose, onSuccess }: AddUserModa
     e.preventDefault();
     setIsSubmitting(true);
 
-    // Simulate API call
-    await new Promise((resolve) => setTimeout(resolve, 1000));
-
-    console.log("Adding user:", formData);
-    alert("User added successfully!");
-    
-    setIsSubmitting(false);
-    onSuccess?.();
-    onClose();
-    
-    // Reset form
-    setFormData({
-      machineId: "",
-      fullName: "",
-      email: "",
-      phone: "",
-      password: "",
-      gender: "",
-      address: "",
-      state: "",
-      district: "",
-    });
+    try {
+      // TODO: Implement real API call to add user
+      console.log("Adding user:", formData);
+      
+      // For now, just simulate success
+      // In production, this would be a real API call
+      await new Promise((resolve) => setTimeout(resolve, 500));
+      
+      alert("User added successfully!");
+      onSuccess?.();
+      onClose();
+      
+      // Reset form
+      setFormData({
+        machineId: "",
+        fullName: "",
+        email: "",
+        phone: "",
+        password: "",
+        gender: "",
+        address: "",
+        state: "",
+        district: "",
+      });
+    } catch (error) {
+      console.error("Failed to add user:", error);
+      alert("Failed to add user. Please try again.");
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (

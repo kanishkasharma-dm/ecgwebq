@@ -22,10 +22,10 @@ const galleryItems = [
     image: "/assets/ecg-12-lead.jpg"
   },
   {
-    title: "Lead II Analysis Window",
+    title: "Control Panel Live",
     description:
-      "Detailed waveform analysis with amplification, rhythm interpretation, and metric tagging for clinician review.",
-    image: "/assets/analysis-lead-ii.jpg"
+      "Live control center with attractive real-time visuals and smooth interactions for demos.",
+    image: "/assets/control-panel-live.jpg"
   }
 ];
 

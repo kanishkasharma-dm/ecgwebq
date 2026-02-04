@@ -1,54 +1,58 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { motion } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
 import { LayoutDashboard, Wind, Activity, Settings, Calendar, LogOut, Bell, Search, User, Users, ChevronLeft, ChevronRight } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, AreaChart, Area } from 'recharts';
+import { fetchReports } from "../../services/reportsApi";
 const deckmountLogo = new URL('../../assets/DeckMount Photo.png', import.meta.url).href;
-
-// --- Data for Charts ---
-const monthlyData = [
-  { name: 'Jan', value: 4 },
-  { name: 'Feb', value: 1 },
-  { name: 'Mar', value: 6 },
-  { name: 'Apr', value: 1 },
-  { name: 'May', value: 2 },
-  { name: 'Jun', value: 1 },
-  { name: 'Jul', value: 1 },
-  { name: 'Aug', value: 1 },
-  { name: 'Sep', value: 1 },
-  { name: 'Oct', value: 4 },
-  { name: 'Nov', value: 2 },
-  { name: 'Dec', value: 2 },
-];
-
-const distributionData = [
-  { name: 'Jan', value: 4 },
-  { name: 'Feb', value: 2 },
-  { name: 'Mar', value: 1 },
-  { name: 'Apr', value: 2 },
-  { name: 'May', value: 6 },
-  { name: 'Jun', value: 1 },
-  { name: 'Jul', value: 1 },
-  { name: 'Aug', value: 4 },
-  { name: 'Sep', value: 1 },
-  { name: 'Oct', value: 2 },
-  { name: 'Nov', value: 1 },
-  { name: 'Dec', value: 1 },
-];
-
-const DARK_PALETTE = ['#1f77b4','#2ca02c','#ff7f0e','#d62728','#9467bd','#8c564b','#e377c2','#7f7f7f','#bcbd22','#17becf','#3b82f6','#10b981'];
-const LIGHT_PALETTE = ['#93c5fd','#a7f3d0','#fde68a','#feb2b2','#c4b5fd','#f5d0c5','#fbcfe8','#d1d5db','#e5e7eb','#a5f3fc','#c7d2fe','#bbf7d0'];
 
 export default function CPAPDashboard() {
   const [isDarkMode, setIsDarkMode] = useState(() => typeof window !== 'undefined' && localStorage.getItem('theme') === 'dark');
   const navigate = useNavigate();
+  const [loading, setLoading] = useState(true);
+  const [reports, setReports] = useState<any[]>([]);
 
   const [currentYear, setCurrentYear] = useState(Math.min(2050, Math.max(1990, new Date().getFullYear())));
   const [currentMonth, setCurrentMonth] = useState(new Date().getMonth());
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
   const monthNames = ['January','February','March','April','May','June','July','August','September','October','November','December'];
   const years = Array.from({ length: 2050 - 1990 + 1 }, (_, i) => 1990 + i);
+  
+  // Calculate data from real reports
+  const monthlyData = useMemo(() => {
+    if (reports.length === 0) {
+      return monthNames.map((name, index) => ({ name, value: 0 }));
+    }
+    
+    return monthNames.map((name, index) => {
+      const monthReports = reports.filter(r => {
+        const reportDate = new Date(r.date);
+        return reportDate.getMonth() === index && reportDate.getFullYear() === currentYear;
+      });
+      return { name, value: monthReports.length };
+    });
+  }, [reports, currentYear]);
+
+  const distributionData = monthlyData;
   const totalUsers = distributionData.reduce((acc, d) => acc + d.value, 0);
+
+  // Fetch real data from API
+  useEffect(() => {
+    const fetchCPAPData = async () => {
+      try {
+        setLoading(true);
+        const response = await fetchReports();
+        setReports(response.reports || []);
+      } catch (error) {
+        console.error('Failed to fetch CPAP data:', error);
+        setReports([]);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchCPAPData();
+  }, []);
  
 
   const goPrevMonth = () => {
@@ -80,15 +84,31 @@ export default function CPAPDashboard() {
   const leadingEmpty = Array(firstDayOfMonth).fill(0);
   const today = new Date();
 
-  const activeUsersTrend = [
-    { name: 'Mon', value: 2 },
-    { name: 'Tue', value: 3 },
-    { name: 'Wed', value: 1 },
-    { name: 'Thu', value: 4 },
-    { name: 'Fri', value: 3 },
-    { name: 'Sat', value: 5 },
-    { name: 'Sun', value: 2 },
-  ];
+  const activeUsersTrend = useMemo(() => {
+    if (reports.length === 0) {
+      return [
+        { name: 'Mon', value: 0 },
+        { name: 'Tue', value: 0 },
+        { name: 'Wed', value: 0 },
+        { name: 'Thu', value: 0 },
+        { name: 'Fri', value: 0 },
+        { name: 'Sat', value: 0 },
+        { name: 'Sun', value: 0 },
+      ];
+    }
+    
+    const days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+    return days.map(day => {
+      const dayReports = reports.filter(r => {
+        const reportDay = new Date(r.date).toLocaleDateString('en-US', { weekday: 'short' });
+        return reportDay === day;
+      });
+      return { name: day, value: dayReports.length };
+    });
+  }, [reports]);
+
+  const DARK_PALETTE = ['#1f77b4','#2ca02c','#ff7f0e','#d62728','#9467bd','#8c564b','#e377c2','#7f7f7f','#bcbd22','#17becf','#3b82f6','#10b981'];
+  const LIGHT_PALETTE = ['#93c5fd','#a7f3d0','#fde68a','#feb2b2','#c4b5fd','#f5d0c5','#fbcfe8','#d1d5db','#e5e7eb','#a5f3fc','#c7d2fe','#bbf7d0'];
 
   useEffect(() => {
     if (isDarkMode) {

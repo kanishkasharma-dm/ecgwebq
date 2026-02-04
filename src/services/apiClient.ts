@@ -10,7 +10,7 @@
 // Get API base URL from environment variables
 // For development: http://localhost:3000/api
 // For production: Set in .env file as VITE_API_BASE_URL=https://your-api.com/api
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000/api';
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "https://6jhix49qt6.execute-api.us-east-1.amazonaws.com";
 
 /**
  * API Response wrapper (matches backend response format)

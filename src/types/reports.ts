@@ -5,14 +5,13 @@
 
 export interface Report {
   id: string;
-  name: string;
-  phoneNumber: string;
+  recordId: string;
+  patientName: string;
   deviceId: string;
   date: string;
-  type?: string;
-  size?: string;
-  s3Key?: string;
-  [key: string]: any; // Allow additional fields from API
+  timestamp: string;
+  fileSize?: number;
+  hasPdf: boolean;
 }
 
 export interface ReportFilters {
@@ -26,7 +25,4 @@ export interface ReportFilters {
 export interface ReportsResponse {
   reports: Report[];
   total: number;
-  page?: number;
-  limit?: number;
 }
-

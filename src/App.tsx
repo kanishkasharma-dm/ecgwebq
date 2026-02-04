@@ -20,6 +20,8 @@ import AdminLayout from "@/components/admin/layout/AdminLayout";
 import UsersPage from "@/components/admin/users/UsersPage";
 import ReportsPage from "@/components/admin/reports/ReportsPage";
 import DashboardOverview from "@/components/admin/dashboard/DashboardOverview";
+import S3FileBrowser from "@/components/S3FileBrowser";
+import ECGGraphsPage from "@/components/admin/graphs/ECGGraphsPage";
 import LoginPage from "@/components/auth/LoginPage";
 import Dashboard from "@/components/dashboard/Dashboard";
 import CPAPLogin from "@/components/dashboard_CPAP_BiPAP/CPAPLogin";
@@ -34,6 +36,8 @@ import VAPSMode from "@/components/dashboard_CPAP_BiPAP/VAPSMode";
 import ReportsLogin from "@/components/dashboard_CPAP_BiPAP/ReportsLogin";
 import ReportsUpload from "@/components/dashboard_CPAP_BiPAP/ReportsUpload";
 import ReportsAnalytics from "@/components/dashboard_CPAP_BiPAP/ReportsAnalytics";
+import DoctorDashboardPresentation from "@/components/doctor/DoctorDashboardPresentation";
+import DoctorReportsPage from "@/components/doctor/DoctorReportsPage";
 
 
 
@@ -86,12 +90,16 @@ export default function App() {
         <Route index element={<DashboardOverview />} />
         <Route path="users" element={<UsersPage />} />
         <Route path="reports" element={<ReportsPage />} />
+        <Route path="s3-browser" element={<S3FileBrowser />} />
+        <Route path="graphs" element={<ECGGraphsPage />} />
       </Route>
       {/* public login for admin / doctor */}
       <Route path="/login" element={<LoginPage />} />
 
         {/* common dashboard (role-based later) */}
             <Route path="/dashboard" element={<Dashboard />} />
+            <Route path="/doctor" element={<DoctorDashboardPresentation />} />
+            <Route path="/doctor/reports" element={<DoctorReportsPage />} />
 
         {/* CPAP/BiPAP Routes */}
         <Route path="/cpap/login" element={<CPAPLogin />} />
