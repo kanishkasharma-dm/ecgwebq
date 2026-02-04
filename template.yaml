@@ -32,7 +32,7 @@ Resources:
     Properties:
       FunctionName: ecg-upload
       Handler: upload.handler
-      CodeUri: api/
+      CodeUri: backend-api/
       Description: 'Upload ECG data to S3'
       Policies:
         - S3CrudPolicy:
@@ -46,7 +46,7 @@ Resources:
     Properties:
       FunctionName: ecg-reports
       Handler: reports.handler
-      CodeUri: api/
+      CodeUri: backend-api/
       Description: 'List ECG reports from S3'
       Policies:
         - S3ReadPolicy:
@@ -60,7 +60,7 @@ Resources:
     Properties:
       FunctionName: ecg-report
       Handler: report.handler
-      CodeUri: api/
+      CodeUri: backend-api/
       Description: 'Get specific ECG report'
       Policies:
         - S3ReadPolicy:
@@ -74,7 +74,7 @@ Resources:
     Properties:
       FunctionName: ecg-doctor-reports
       Handler: doctor-reports.handler
-      CodeUri: api/
+      CodeUri: backend-api/
       Description: 'List ECG PDF reports for doctors'
       Policies:
         - S3ReadPolicy:
@@ -88,7 +88,7 @@ Resources:
     Properties:
       FunctionName: ecg-doctor-upload-reviewed
       Handler: doctor-upload-reviewed.handler
-      CodeUri: api/
+      CodeUri: backend-api/
       Description: 'Upload doctor-reviewed ECG PDF to S3'
       Policies:
         - S3CrudPolicy:
