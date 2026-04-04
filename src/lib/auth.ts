@@ -4,6 +4,13 @@ export interface StoredUser {
   userId: string;
   role: string;
   name: string;
+  email?: string;
+  passwordResetRequired?: boolean;
+}
+
+export function isJwtLikeToken(value: string): boolean {
+  const segments = value.split(".");
+  return segments.length === 3 && segments.every((segment) => segment.trim().length > 0);
 }
 
 const STORAGE_KEYS = {
@@ -43,6 +50,33 @@ function safeRemove(key: string): void {
   }
 }
 
+function normalizeToken(raw: string | null): string | null {
+  if (!raw) {
+    return null;
+  }
+
+  const trimmed = raw.trim().replace(/^Bearer\s+/i, "").replace(/^"+|"+$/g, "");
+  if (!trimmed) {
+    return null;
+  }
+
+  // Reject common malformed auth values so protected requests never send SigV4/base64 hash material.
+  if (
+    /^AWS4-HMAC-SHA256/i.test(trimmed) ||
+    trimmed.includes("Credential=") ||
+    trimmed.includes("SignedHeaders=") ||
+    trimmed.includes("Signature=")
+  ) {
+    return null;
+  }
+
+  if (!isJwtLikeToken(trimmed)) {
+    return null;
+  }
+
+  return trimmed;
+}
+
 function parseUser(raw: string | null): StoredUser | null {
   if (!raw) return null;
 
@@ -61,7 +95,7 @@ function getRoleKeys(role: AuthRole) {
 
 export function getStoredToken(role: AuthRole): string | null {
   const roleKeys = getRoleKeys(role);
-  const roleToken = safeGet(roleKeys.token);
+  const roleToken = normalizeToken(safeGet(roleKeys.token));
 
   if (roleToken) {
     return roleToken;
@@ -69,7 +103,7 @@ export function getStoredToken(role: AuthRole): string | null {
 
   const legacyRole = safeGet(STORAGE_KEYS.legacyRole);
   if (legacyRole === role) {
-    return safeGet(STORAGE_KEYS.legacyToken);
+    return normalizeToken(safeGet(STORAGE_KEYS.legacyToken));
   }
 
   return null;
@@ -97,8 +131,13 @@ export function isRoleAuthenticated(role: AuthRole): boolean {
 
 export function setAuthSession(role: AuthRole, token: string, user: StoredUser): void {
   const roleKeys = getRoleKeys(role);
+  const normalizedToken = normalizeToken(token);
 
-  safeSet(roleKeys.token, token);
+  if (!normalizedToken) {
+    throw new Error("Received an invalid authentication token");
+  }
+
+  safeSet(roleKeys.token, normalizedToken);
   safeSet(roleKeys.user, JSON.stringify(user));
 
   if (role === "admin") {
@@ -110,7 +149,7 @@ export function setAuthSession(role: AuthRole, token: string, user: StoredUser):
     safeSet(STORAGE_KEYS.legacyDoctorId, user.userId);
   }
 
-  safeSet(STORAGE_KEYS.legacyToken, token);
+  safeSet(STORAGE_KEYS.legacyToken, normalizedToken);
   safeSet(STORAGE_KEYS.legacyUser, JSON.stringify(user));
   safeSet(STORAGE_KEYS.legacyRole, role);
 }
