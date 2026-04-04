@@ -140,6 +140,7 @@ import {
   clearAllAuthSessions,
   getStoredToken,
   getStoredUser,
+  isJwtLikeToken,
   isRoleAuthenticated,
   setAuthSession,
 } from '@/lib/auth';
@@ -150,12 +151,14 @@ interface User {
   userId: string;
   role: string;
   name: string;
+  email?: string;
 }
 
 type AuthSuccessPayload = {
   token?: string;
   user?: Record<string, unknown>;
   doctor?: Record<string, unknown>;
+  passwordResetRequired?: boolean;
 };
 
 interface AuthContextType {
@@ -199,18 +202,47 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return null;
     }
 
-    if (responseData?.data?.token) {
+    const nestedTokenCandidates = [
+      responseData?.data?.token,
+      responseData?.data?.accessToken,
+      responseData?.data?.idToken,
+      responseData?.data?.jwt,
+    ].filter((candidate: unknown): candidate is string => typeof candidate === "string");
+
+    const rootTokenCandidates = [
+      responseData?.token,
+      responseData?.accessToken,
+      responseData?.idToken,
+      responseData?.jwt,
+    ].filter((candidate: unknown): candidate is string => typeof candidate === "string");
+
+    const nestedToken = nestedTokenCandidates.find((candidate) => isJwtLikeToken(candidate.replace(/^Bearer\s+/i, "").trim()));
+    const rootToken = rootTokenCandidates.find((candidate) => isJwtLikeToken(candidate.replace(/^Bearer\s+/i, "").trim()));
+
+    if (nestedToken) {
       return {
-        token: responseData.data.token,
+        token: nestedToken,
         user: responseData.data.user,
+        passwordResetRequired: Boolean(
+          responseData?.data?.password_reset_required ||
+            responseData?.data?.passwordResetRequired ||
+            responseData?.data?.user?.password_reset_required ||
+            responseData?.data?.user?.passwordResetRequired
+        ),
       };
     }
 
-    if (responseData?.token) {
+    if (rootToken) {
       return {
-        token: responseData.token,
+        token: rootToken,
         user: responseData.user,
         doctor: responseData.doctor,
+        passwordResetRequired: Boolean(
+          responseData?.password_reset_required ||
+            responseData?.passwordResetRequired ||
+            responseData?.doctor?.password_reset_required ||
+            responseData?.doctor?.passwordResetRequired
+        ),
       };
     }
 
@@ -224,6 +256,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       userId: String(rawUser.userId || rawUser.doctorId || rawUser.id || username),
       role: String(rawUser.role || role),
       name: String(rawUser.name || rawUser.doctor_name || username),
+      email: typeof rawUser.email === "string" ? rawUser.email : undefined,
+      passwordResetRequired: Boolean(
+        payload.passwordResetRequired ||
+          rawUser.password_reset_required ||
+          rawUser.passwordResetRequired
+      ),
     };
   };
 
@@ -270,6 +308,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setAuthSession(role, newToken, newUser);
 
         return true;
+      }
+
+      if (response.ok && !authPayload?.token) {
+        console.error(`${role} login returned no JWT-like token`, { url, responseData });
       }
 
       console.error(`${role} login failed`, { url, status: response.status, responseData });

@@ -279,11 +279,50 @@ export async function fetchS3FileContent<T = any>(key: string): Promise<T> {
 /* ======================= DOCTOR API ======================= */
 
 export interface DoctorReportSummary {
+  id: string;
   key: string;
   fileName: string;
   url: string;
   uploadedAt?: string; // ISO timestamp
   lastModified?: string; // Keep for backward compatibility
+  assignedAt?: string;
+  reviewedAt?: string;
+  patientName?: string;
+  reportType?: string;
+  status?: string;
+}
+
+function deriveFileName(key: string | undefined, fallback: string = "Report"): string {
+  if (!key) {
+    return fallback;
+  }
+
+  const parts = key.split("/");
+  return parts[parts.length - 1] || fallback;
+}
+
+function normalizeDoctorReportSummary(raw: any, fallbackStatus: "pending" | "reviewed"): DoctorReportSummary {
+  const key = raw?.key || raw?.fileKey || raw?.file_path || raw?.fileName || raw?.filename || raw?.id || "";
+  const fileName =
+    raw?.fileName ||
+    raw?.filename ||
+    raw?.originalFileName ||
+    raw?.reportName ||
+    deriveFileName(key, "Report");
+
+  return {
+    id: String(raw?.id || raw?.reportId || key || fileName),
+    key: String(key || fileName),
+    fileName: String(fileName),
+    url: String(raw?.url || raw?.fileUrl || raw?.presignedUrl || raw?.downloadUrl || ""),
+    uploadedAt: raw?.uploadedAt || raw?.uploaded_at,
+    lastModified: raw?.lastModified || raw?.last_modified,
+    assignedAt: raw?.assignedAt || raw?.assigned_at || raw?.uploadedAt || raw?.lastModified,
+    reviewedAt: raw?.reviewedAt || raw?.reviewed_at || raw?.uploadedAt || raw?.lastModified,
+    patientName: raw?.patientName || raw?.patient_name,
+    reportType: raw?.reportType || raw?.report_type || raw?.type,
+    status: raw?.status || fallbackStatus,
+  };
 }
 
 export async function fetchDoctorReports(): Promise<DoctorReportSummary[]> {
@@ -299,7 +338,8 @@ export async function fetchDoctorReports(): Promise<DoctorReportSummary[]> {
   }
 
   const data = await response.json();
-  return data.reports || data.data?.reports || [];
+  const reports = data.reports || data.data?.reports || [];
+  return reports.map((report: any) => normalizeDoctorReportSummary(report, "pending"));
 }
 
 export async function uploadReviewedReport(formData: FormData): Promise<void> {
@@ -373,6 +413,43 @@ export interface Doctor {
   updatedAt: string;
 }
 
+export interface DoctorInviteInfo {
+  doctorId?: string;
+  name: string;
+  email: string;
+  specialization?: string;
+  hospital?: string;
+  expiresAt?: string;
+}
+
+function extractApiMessage(payload: unknown, fallback: string): string {
+  if (!payload || typeof payload !== 'object') {
+    return fallback;
+  }
+
+  const data = payload as Record<string, any>;
+  return data.message || data.error?.message || data.error || fallback;
+}
+
+function normalizeInviteDoctor(payload: any): DoctorInviteInfo {
+  const source =
+    payload?.doctor ||
+    payload?.data?.doctor ||
+    payload?.invite ||
+    payload?.data?.invite ||
+    payload?.data ||
+    payload;
+
+  return {
+    doctorId: source?.doctorId || source?.id,
+    name: source?.name || source?.doctor_name || 'Doctor',
+    email: source?.email || '',
+    specialization: source?.specialization,
+    hospital: source?.hospital,
+    expiresAt: source?.expiresAt || source?.expires_at,
+  };
+}
+
 export async function fetchReviewedReports(): Promise<DoctorReportSummary[]> {
   const params = new URLSearchParams({ status: "reviewed" });
   const url = `${joinApiUrl(DOCTOR_API_BASE_URL, DOCTOR_ROUTES.reports)}?${params.toString()}`;
@@ -394,7 +471,8 @@ export async function fetchReviewedReports(): Promise<DoctorReportSummary[]> {
   }
 
   const data = await response.json();
-  return data.reports || data.data?.reports || [];
+  const reports = data.reports || data.data?.reports || [];
+  return reports.map((report: any) => normalizeDoctorReportSummary(report, "reviewed"));
 }
 
 export async function fetchDoctors(): Promise<Doctor[]> {
@@ -419,17 +497,93 @@ export async function fetchDoctors(): Promise<Doctor[]> {
 }
 
 export async function createDoctor(payload: CreateDoctorPayload): Promise<Doctor> {
-  const response = await apiRequest<{success: boolean, data: { doctor: Doctor } } | { success: boolean, doctor: Doctor }>(ADMIN_ROUTES.createDoctor, {
-    method: 'POST',
-    body: JSON.stringify(payload)
+  const url = joinApiUrl(API_BASE_URL, ADMIN_ROUTES.createDoctor);
+  const response = await fetch(url, {
+    method: "POST",
+    headers: getAdminAuthHeaders(true),
+    body: JSON.stringify({
+      name: payload.name,
+      email: payload.email,
+    }),
   });
-  
-  if ('data' in response && response.data && 'doctor' in response.data) {
-    return response.data.doctor;
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    let errorMessage = response.statusText;
+    try {
+      const errorJson = JSON.parse(errorText);
+      errorMessage = errorJson.message || errorJson.error?.message || errorMessage;
+    } catch {
+      if (errorText) {
+        errorMessage = errorText;
+      }
+    }
+    throw new Error(errorMessage);
   }
-  if ('doctor' in response) {
-    return (response as any).doctor;
+
+  const responseData = await response.json() as {success: boolean, data: { doctor: Doctor } } | { success: boolean, doctor: Doctor };
+  
+  if ('data' in responseData && responseData.data && 'doctor' in responseData.data) {
+    return responseData.data.doctor;
+  }
+  if ('doctor' in responseData) {
+    return (responseData as any).doctor;
   }
   
-  return response as unknown as Doctor;
+  return responseData as unknown as Doctor;
+}
+
+export async function validateDoctorInvite(token: string): Promise<DoctorInviteInfo> {
+  const url = joinApiUrl(DOCTOR_API_BASE_URL, DOCTOR_ROUTES.validateInvite);
+
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Accept: 'application/json',
+    },
+    body: JSON.stringify({ token }),
+  });
+
+  const responseText = await response.text();
+  const responseData = responseText ? JSON.parse(responseText) : null;
+
+  if (!response.ok || responseData?.success === false) {
+    throw new Error(extractApiMessage(responseData, 'This invitation link is invalid or expired.'));
+  }
+
+  return normalizeInviteDoctor(responseData);
+}
+
+export interface SetDoctorPasswordPayload {
+  token: string;
+  email: string;
+  temporaryPassword: string;
+  newPassword: string;
+  confirmPassword: string;
+}
+
+export async function setDoctorPassword(payload: SetDoctorPasswordPayload): Promise<void> {
+  const url = joinApiUrl(DOCTOR_API_BASE_URL, DOCTOR_ROUTES.setPassword);
+
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Accept: 'application/json',
+    },
+    body: JSON.stringify(payload),
+  });
+
+  const responseText = await response.text();
+  const responseData = responseText ? JSON.parse(responseText) : null;
+
+  if (!response.ok || responseData?.success === false) {
+    throw new Error(
+      extractApiMessage(
+        responseData,
+        'Unable to set your password. The invitation may no longer be valid.'
+      )
+    );
+  }
 }

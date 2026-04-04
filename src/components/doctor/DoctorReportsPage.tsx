@@ -6,11 +6,14 @@ import { FileText, Eye, RefreshCcw, LayoutDashboard, LogOut, Heart, CheckCircle,
 import { fetchDoctorReports, fetchReviewedReports, DoctorReportSummary } from "@/api/ecgApi";
 import { ReviewModal, DoctorReport } from "./ReviewModal";
 import { useAuth } from "@/contexts/AuthContext";
+import { useDoctorTheme } from "./useDoctorTheme";
+import "./doctor-theme.css";
 
 export const DoctorReportsPage: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const { logout } = useAuth();
+  const { theme, toggleTheme } = useDoctorTheme();
   const [reports, setReports] = useState<DoctorReport[]>([]);
   const [reviewedReports, setReviewedReports] = useState<DoctorReportSummary[]>([]);
   const [loading, setLoading] = useState(true);
@@ -152,21 +155,27 @@ export const DoctorReportsPage: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-50 flex">
+    <div className="doctor-workspace min-h-screen bg-slate-950 text-slate-50 flex" data-theme={theme}>
       {/* Sidebar */}
       <motion.aside
         initial={{ x: -280 }}
         animate={{ x: 0 }}
-        className="fixed left-0 top-0 z-40 h-screen w-64 bg-gradient-to-b from-slate-900 via-slate-900 to-slate-950 border-r border-white/10 flex flex-col shadow-2xl"
+        className="doctor-sidebar fixed left-0 top-0 z-40 h-screen w-64 bg-gradient-to-b from-slate-900 via-slate-900 to-slate-950 border-r border-white/10 flex flex-col shadow-2xl"
       >
-        <div className="p-6 border-b border-white/10">
+        <div className="doctor-sidebar-header p-6 border-b border-white/10">
           <div className="flex items-center gap-3">
-            <div className="p-2 bg-gradient-to-br from-brand-orange to-brand-electric rounded-xl shadow-glow">
+            <button
+              type="button"
+              onClick={toggleTheme}
+              className="p-2 bg-gradient-to-br from-brand-orange to-brand-electric rounded-xl shadow-glow transition-transform hover:scale-105"
+              aria-label={theme === "light" ? "Switch to dark theme" : "Switch to light theme"}
+              title={theme === "light" ? "Switch to dark theme" : "Switch to light theme"}
+            >
               <Heart className="w-6 h-6 text-white" />
-            </div>
+            </button>
             <div>
-              <h2 className="font-bold text-lg text-white">CARDIOX</h2>
-              <p className="text-xs text-white/60">ECG Reports</p>
+              <h2 className="doctor-brand-title font-bold text-lg text-white">CARDIOX</h2>
+              <p className="doctor-brand-subtitle text-xs text-white/60">ECG Reports</p>
             </div>
           </div>
         </div>
@@ -184,7 +193,7 @@ export const DoctorReportsPage: React.FC = () => {
               className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all ${
                 (item.id === 'reports' && isReportsActive) || (item.id === 'dashboard' && !isReportsActive)
                   ? 'bg-gradient-to-r from-brand-orange via-brand-electric to-brand-focus text-white shadow-glow'
-                  : 'text-white/70 hover:bg-white/10 hover:text-white'
+                  : 'doctor-nav-idle text-white/70 hover:bg-white/10 hover:text-white'
               }`}
             >
               <item.icon className="w-5 h-5" />
@@ -193,7 +202,7 @@ export const DoctorReportsPage: React.FC = () => {
           ))}
         </nav>
         
-        <div className="p-4 border-t border-white/10 mt-auto">
+        <div className="doctor-sidebar-footer p-4 border-t border-white/10 mt-auto">
           <motion.button
             whileHover={{ x: 4 }}
             whileTap={{ scale: 0.98 }}
@@ -218,8 +227,8 @@ export const DoctorReportsPage: React.FC = () => {
                 <FileText className="h-5 w-5" />
               </div>
               <div>
-                <h1 className="text-2xl font-bold">Doctor Reports</h1>
-                <p className="text-xs text-slate-400">
+                <h1 className="doctor-page-title text-2xl font-bold">Doctor Reports</h1>
+                <p className="doctor-page-subtitle text-xs text-slate-400">
                   Review uploaded ECG PDF reports and submit your findings.
                 </p>
               </div>
@@ -231,7 +240,7 @@ export const DoctorReportsPage: React.FC = () => {
                 loadReports();
                 loadReviewedReports();
               }}
-              className="inline-flex items-center gap-2 rounded-lg bg-slate-800 px-3 py-2 text-xs font-semibold text-slate-100 shadow hover:bg-slate-700"
+              className="doctor-refresh-button inline-flex items-center gap-2 rounded-lg bg-slate-800 px-3 py-2 text-xs font-semibold text-slate-100 shadow hover:bg-slate-700"
             >
               <RefreshCcw size={14} />
               Refresh
@@ -239,7 +248,7 @@ export const DoctorReportsPage: React.FC = () => {
           </div>
 
           {/* Tabs */}
-          <div className="mb-6 flex gap-1 rounded-xl bg-slate-800/50 p-1 w-fit">
+          <div className="doctor-tabs mb-6 flex gap-1 rounded-xl bg-slate-800/50 p-1 w-fit">
             <motion.button
               whileHover={{ scale: 1.02 }}
               whileTap={{ scale: 0.98 }}
@@ -247,7 +256,7 @@ export const DoctorReportsPage: React.FC = () => {
               className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${
                 activeTab === 'pending'
                   ? 'bg-gradient-to-r from-orange-500 to-amber-500 text-white shadow-lg'
-                  : 'text-slate-400 hover:text-slate-200'
+                  : 'doctor-tab-idle text-slate-400 hover:text-slate-200'
               }`}
             >
               <Clock size={16} />
@@ -260,7 +269,7 @@ export const DoctorReportsPage: React.FC = () => {
               className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${
                 activeTab === 'reviewed'
                   ? 'bg-gradient-to-r from-emerald-500 to-teal-500 text-white shadow-lg'
-                  : 'text-slate-400 hover:text-slate-200'
+                  : 'doctor-tab-idle text-slate-400 hover:text-slate-200'
               }`}
             >
               <CheckCircle size={16} />
@@ -270,9 +279,9 @@ export const DoctorReportsPage: React.FC = () => {
 
           {/* Pending Reports Section */}
           {activeTab === 'pending' && (
-            <div className="overflow-hidden rounded-2xl border border-slate-800 bg-slate-900/70 shadow-xl">
-              <div className="border-b border-slate-800 bg-slate-900/80 px-4 py-3">
-                <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">
+            <div className="doctor-panel overflow-hidden rounded-2xl border border-slate-800 bg-slate-900/70 shadow-xl">
+              <div className="doctor-panel-divider border-b border-slate-800 bg-slate-900/80 px-4 py-3">
+                <p className="doctor-table-heading text-xs font-semibold uppercase tracking-wide text-slate-400">
                   Pending ECG PDF Reports
                 </p>
               </div>
@@ -293,27 +302,27 @@ export const DoctorReportsPage: React.FC = () => {
               ) : (
                 <>
                   <div className="overflow-x-auto">
-                    <table className="min-w-full divide-y divide-slate-800 text-sm">
-                      <thead className="bg-slate-900/80">
+                    <table className="min-w-full doctor-table-body divide-y divide-slate-800 text-sm">
+                      <thead className="doctor-table-head bg-slate-900/80">
                         <tr>
-                          <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-400">
+                          <th className="doctor-table-heading px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-400">
                             File Name
                           </th>
-                          <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-400">
+                          <th className="doctor-table-heading px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-400">
                             Last Modified
                           </th>
-                          <th className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wide text-slate-400">
+                          <th className="doctor-table-heading px-4 py-3 text-right text-xs font-semibold uppercase tracking-wide text-slate-400">
                             Actions
                           </th>
                         </tr>
                       </thead>
-                      <tbody className="divide-y divide-slate-800">
+                      <tbody className="doctor-table-body divide-y divide-slate-800">
                         {getCurrentPendingReports().map((report) => (
-                          <tr key={report.key} className="hover:bg-slate-900/60">
-                            <td className="px-4 py-3 text-slate-100">
+                          <tr key={report.key} className="doctor-table-row hover:bg-slate-900/60">
+                            <td className="doctor-table-cell-strong px-4 py-3 text-slate-100">
                               {report.fileName}
                             </td>
-                            <td className="px-4 py-3 text-xs text-slate-400">
+                            <td className="doctor-table-cell px-4 py-3 text-xs text-slate-400">
                               {(report.lastModified || (report as any).uploadedAt)
                                 ? new Date((report.lastModified || (report as any).uploadedAt)!).toLocaleString()
                                 : "--"}
@@ -324,7 +333,7 @@ export const DoctorReportsPage: React.FC = () => {
                                   whileHover={{ scale: 1.04 }}
                                   whileTap={{ scale: 0.96 }}
                                   onClick={() => report.url && window.open(report.url, "_blank")}
-                                  className="inline-flex items-center gap-1 rounded-lg bg-slate-800 px-3 py-1.5 text-xs font-medium text-slate-100 hover:bg-slate-700"
+                                  className="doctor-secondary-button inline-flex items-center gap-1 rounded-lg bg-slate-800 px-3 py-1.5 text-xs font-medium text-slate-100 hover:bg-slate-700"
                                 >
                                   <Eye size={14} />
                                   Preview
@@ -359,9 +368,9 @@ export const DoctorReportsPage: React.FC = () => {
 
           {/* Reviewed Reports Section */}
           {activeTab === 'reviewed' && (
-            <div className="overflow-hidden rounded-2xl border border-slate-800 bg-slate-900/70 shadow-xl">
-              <div className="border-b border-slate-800 bg-slate-900/80 px-4 py-3">
-                <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">
+            <div className="doctor-panel overflow-hidden rounded-2xl border border-slate-800 bg-slate-900/70 shadow-xl">
+              <div className="doctor-panel-divider border-b border-slate-800 bg-slate-900/80 px-4 py-3">
+                <p className="doctor-table-heading text-xs font-semibold uppercase tracking-wide text-slate-400">
                   Reviewed ECG PDF Reports
                 </p>
               </div>
@@ -382,37 +391,37 @@ export const DoctorReportsPage: React.FC = () => {
               ) : (
                 <>
                   <div className="overflow-x-auto">
-                    <table className="min-w-full divide-y divide-slate-800 text-sm">
-                      <thead className="bg-slate-900/80">
+                    <table className="min-w-full doctor-table-body divide-y divide-slate-800 text-sm">
+                      <thead className="doctor-table-head bg-slate-900/80">
                         <tr>
-                          <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-400">
+                          <th className="doctor-table-heading px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-400">
                             File Name
                           </th>
-                          <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-400">
+                          <th className="doctor-table-heading px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-400">
                             Reviewed Date
                           </th>
-                          <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-400">
+                          <th className="doctor-table-heading px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-400">
                             Last Modified
                           </th>
-                          <th className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wide text-slate-400">
+                          <th className="doctor-table-heading px-4 py-3 text-right text-xs font-semibold uppercase tracking-wide text-slate-400">
                             Actions
                           </th>
                         </tr>
                       </thead>
-                      <tbody className="divide-y divide-slate-800">
+                      <tbody className="doctor-table-body divide-y divide-slate-800">
                         {getCurrentReviewedReports().map((report) => (
-                          <tr key={report.key} className="hover:bg-slate-900/60">
-                            <td className="px-4 py-3 text-slate-100">
+                          <tr key={report.key} className="doctor-table-row hover:bg-slate-900/60">
+                            <td className="doctor-table-cell-strong px-4 py-3 text-slate-100">
                               {report.fileName}
                             </td>
-                            <td className="px-4 py-3 text-xs text-slate-400">
+                            <td className="doctor-table-cell px-4 py-3 text-xs text-slate-400">
                               {report.uploadedAt
                                 ? new Date(report.uploadedAt).toLocaleString()
                                 : report.lastModified
                                 ? new Date(report.lastModified).toLocaleString()
                                 : "--"}
                             </td>
-                            <td className="px-4 py-3 text-xs text-slate-400">
+                            <td className="doctor-table-cell px-4 py-3 text-xs text-slate-400">
                               {report.lastModified || report.uploadedAt
                                 ? new Date(report.lastModified || report.uploadedAt!).toLocaleString()
                                 : "--"}
@@ -423,7 +432,7 @@ export const DoctorReportsPage: React.FC = () => {
                                   whileHover={{ scale: 1.04 }}
                                   whileTap={{ scale: 0.96 }}
                                   onClick={() => report.url && window.open(report.url, "_blank")}
-                                  className="inline-flex items-center gap-1 rounded-lg bg-slate-800 px-3 py-1.5 text-xs font-medium text-slate-100 hover:bg-slate-700"
+                                  className="doctor-secondary-button inline-flex items-center gap-1 rounded-lg bg-slate-800 px-3 py-1.5 text-xs font-medium text-slate-100 hover:bg-slate-700"
                                 >
                                   <Eye size={14} />
                                   Preview
@@ -465,4 +474,3 @@ export const DoctorReportsPage: React.FC = () => {
 };
 
 export default DoctorReportsPage;
-

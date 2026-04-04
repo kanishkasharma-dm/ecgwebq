@@ -41,6 +41,7 @@ import ReportsUpload from "@/components/dashboard_CPAP_BiPAP/ReportsUpload";
 import ReportsAnalytics from "@/components/dashboard_CPAP_BiPAP/ReportsAnalytics";
 import DoctorDashboardPresentation from "@/components/doctor/DoctorDashboardPresentation";
 import DoctorReportsPage from "@/components/doctor/DoctorReportsPage";
+import DoctorSetupPage from "@/components/doctor/DoctorSetupPage";
 
 
 
@@ -107,6 +108,7 @@ export default function App() {
       </Route>
       {/* public login for admin / doctor */}
       <Route path="/login" element={<LoginPage />} />
+      <Route path="/doctor/setup" element={<DoctorSetupPage />} />
 
         {/* CPAP/BiPAP Routes */}
         <Route path="/cpap/login" element={<CPAPLogin />} />

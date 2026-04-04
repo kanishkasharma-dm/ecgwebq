@@ -26,6 +26,10 @@ export default function LoginPage() {
   const [showDoctorPassword, setShowDoctorPassword] = useState(false);
 
   const handleLogin = async (role: Role, username: string, password: string) => {
+    if (isLoading) {
+      return;
+    }
+
     if (!username || !password) {
       showNotification("Please enter username and password", "warning");
       return;
@@ -194,7 +198,7 @@ export default function LoginPage() {
                     )
                   }
                   className={`w-full mt-6 py-3.5 rounded-xl bg-gradient-to-r ${box.gradient} text-white font-semibold shadow-lg hover:shadow-xl transition-all duration-200`}
-                  disabled={isLoading}
+                  disabled={isLoading && submittingRole === box.role}
                 >
                   {isLoading && submittingRole === box.role ? "Signing In..." : `Login as ${box.title}`}
                 </motion.button>

@@ -1,6 +1,6 @@
 import React from "react";
 import { Navigate, Outlet, useLocation } from "react-router-dom";
-import { AuthRole, isRoleAuthenticated } from "@/lib/auth";
+import { AuthRole, getStoredToken, getStoredUser, isRoleAuthenticated } from "@/lib/auth";
 
 interface RequireRoleProps {
   role: AuthRole;
@@ -16,6 +16,16 @@ export default function RequireRole({ role }: RequireRoleProps) {
 
   if (!isRoleAuthenticated(role)) {
     return <Navigate to={redirectByRole[role]} replace state={{ from: location }} />;
+  }
+
+  if (role === "doctor") {
+    const doctorUser = getStoredUser("doctor");
+    const doctorToken = getStoredToken("doctor");
+
+    if (doctorUser?.passwordResetRequired && doctorToken) {
+      const setupPath = `/doctor/setup?token=${encodeURIComponent(doctorToken)}`;
+      return <Navigate to={setupPath} replace state={{ from: location }} />;
+    }
   }
 
   return <Outlet />;

@@ -1,908 +1,609 @@
-import React, { useState, useMemo, useEffect } from 'react';
-import { useNavigate, useLocation } from 'react-router-dom';
-import { motion } from 'framer-motion';
-import { 
-  User, 
-  FileText, 
-  TrendingUp, 
-  Calendar, 
-  Clock, 
-  DollarSign,
-  Activity,
-  Award,
-  ChevronRight,
-  Star,
-  CheckCircle,
-  AlertCircle,
+import React, { useEffect, useMemo, useState } from "react";
+import { useLocation, useNavigate } from "react-router-dom";
+import { motion } from "framer-motion";
+import {
+  AlertTriangle,
+  ArrowRight,
+  CalendarDays,
+  CheckCircle2,
+  Clock3,
+  Eye,
+  FileClock,
+  FileText,
   Heart,
-  Stethoscope,
   LayoutDashboard,
-  Users,
-  Bell,
-  Settings,
   LogOut,
-  Sparkles,
-  Zap,
-  BarChart3,
-  Search,
-  Filter,
-  X,
-  RefreshCw
-} from 'lucide-react';
-import doctorImage from '../../assets/doctor.jpg';
-import { useAuth } from '@/contexts/AuthContext';
+  Mail,
+  RefreshCcw,
+  Stethoscope,
+  UserCircle2,
+} from "lucide-react";
+import { fetchDoctorReports, fetchReviewedReports, type DoctorReportSummary } from "@/api/ecgApi";
+import { useAuth } from "@/contexts/AuthContext";
+import { useDoctorTheme } from "./useDoctorTheme";
+import "./doctor-theme.css";
 
-interface DoctorProfile {
-  name: string;
-  specialization: string;
-  experience: string;
-  rating: number;
-  totalReviews: number;
-  avatar: string;
+interface DashboardAlert {
+  type: "overdue" | "new";
+  message: string;
 }
 
-interface EarningsData {
-  perReport: number;
-  total: number;
-  today: number;
-  weekly: number;
-  monthly: number;
-  todayReports: number;
-  weeklyReports: number;
-  monthlyReports: number;
+function formatLongDate(date: Date): string {
+  return new Intl.DateTimeFormat("en-IN", {
+    weekday: "long",
+    day: "numeric",
+    month: "long",
+    year: "numeric",
+  }).format(date);
 }
 
-interface RecentReport {
-  id: string;
-  serialId: string;
-  username: string;
-  patientName: string;
-  phoneNumber: string;
-  reportType: string;
-  reviewedAt: string;
-  earnings: number;
-  status: 'completed' | 'pending';
+function formatDateTime(value?: string): string {
+  if (!value) {
+    return "--";
+  }
+
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) {
+    return "--";
+  }
+
+  return parsed.toLocaleString();
 }
 
-interface FilterState {
-  serialId: string;
-  username: string;
-  phoneNumber: string;
+function getStartOfToday(now: Date): Date {
+  const start = new Date(now);
+  start.setHours(0, 0, 0, 0);
+  return start;
+}
+
+function getStartOfWeek(now: Date): Date {
+  const start = new Date(now);
+  const day = start.getDay();
+  const diff = day === 0 ? -6 : 1 - day;
+  start.setDate(start.getDate() + diff);
+  start.setHours(0, 0, 0, 0);
+  return start;
+}
+
+function safeDate(value?: string): Date | null {
+  if (!value) {
+    return null;
+  }
+
+  const parsed = new Date(value);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+}
+
+function getTurnaroundMinutes(report: DoctorReportSummary): number | null {
+  const assignedAt = safeDate(report.assignedAt || report.lastModified || report.uploadedAt);
+  const reviewedAt = safeDate(report.reviewedAt || report.uploadedAt || report.lastModified);
+
+  if (!assignedAt || !reviewedAt) {
+    return null;
+  }
+
+  const diff = reviewedAt.getTime() - assignedAt.getTime();
+  if (diff < 0) {
+    return null;
+  }
+
+  return Math.round(diff / 60000);
+}
+
+function formatTurnaround(minutes: number): string {
+  if (minutes < 60) {
+    return `${minutes} min`;
+  }
+
+  const hours = Math.floor(minutes / 60);
+  const remainingMinutes = minutes % 60;
+  return remainingMinutes === 0 ? `${hours}h` : `${hours}h ${remainingMinutes}m`;
+}
+
+function buildAlerts(pendingReports: DoctorReportSummary[], now: Date): DashboardAlert[] {
+  const alerts: DashboardAlert[] = [];
+  const oneDayAgo = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+
+  const overdueCount = pendingReports.filter((report) => {
+    const assignedAt = safeDate(report.assignedAt || report.lastModified || report.uploadedAt);
+    return assignedAt ? assignedAt < oneDayAgo : false;
+  }).length;
+
+  const newlyAssignedCount = pendingReports.filter((report) => {
+    const assignedAt = safeDate(report.assignedAt || report.lastModified || report.uploadedAt);
+    return assignedAt ? assignedAt >= oneDayAgo : false;
+  }).length;
+
+  if (overdueCount > 0) {
+    alerts.push({
+      type: "overdue",
+      message: `${overdueCount} pending report${overdueCount === 1 ? "" : "s"} older than 24 hours`,
+    });
+  }
+
+  if (newlyAssignedCount > 0) {
+    alerts.push({
+      type: "new",
+      message: `${newlyAssignedCount} newly assigned report${newlyAssignedCount === 1 ? "" : "s"} in the last 24 hours`,
+    });
+  }
+
+  return alerts;
 }
 
 const DoctorDashboardPresentation: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
-  const { logout } = useAuth();
-  const [selectedPeriod, setSelectedPeriod] = useState<'today' | 'weekly' | 'monthly'>('today');
-  const [earningsGrowth, setEarningsGrowth] = useState(12.5);
-  const [activeNav, setActiveNav] = useState('dashboard');
+  const { logout, user } = useAuth();
+  const { theme, toggleTheme } = useDoctorTheme();
 
-  // Sync activeNav with current route
+  const [pendingReports, setPendingReports] = useState<DoctorReportSummary[]>([]);
+  const [reviewedReports, setReviewedReports] = useState<DoctorReportSummary[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  const loadDashboard = async () => {
+    setLoading(true);
+    setError(null);
+
+    try {
+      const [pending, reviewed] = await Promise.all([
+        fetchDoctorReports(),
+        fetchReviewedReports(),
+      ]);
+
+      setPendingReports(pending);
+      setReviewedReports(reviewed);
+    } catch (err: any) {
+      setError(err?.message || "Failed to load doctor dashboard.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
   useEffect(() => {
-    if (location.pathname === '/doctor/reports') {
-      setActiveNav('reports');
-    } else if (location.pathname === '/doctor') {
-      setActiveNav('dashboard');
-    }
-  }, [location.pathname]);
-  const [filters, setFilters] = useState<FilterState>({
-    serialId: '',
-    username: '',
-    phoneNumber: ''
-  });
-  const [showFilters, setShowFilters] = useState(false);
-  
-  
+    void loadDashboard();
+  }, []);
 
-  
-  // Get current date
-  const currentDate = new Date();
-  const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
-  const monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
-  const formattedDate = `${dayNames[currentDate.getDay()]}, ${currentDate.getDate()} ${monthNames[currentDate.getMonth()]} ${currentDate.getFullYear()}`;
-  
-  // Mock alerts
-  const alerts = [
-    { id: 1, type: 'appointment', message: 'New appointment request from John Doe', time: '30 minutes ago', avatar: '👤' },
-    { id: 2, type: 'review', message: 'New review from Sarah Wilson', time: '1 hour ago', avatar: '👤' },
-    { id: 3, type: 'cancelled', message: 'Appointment cancelled by Michael Brown', time: '2 hours ago', avatar: '👤' },
+  const now = useMemo(() => new Date(), []);
+  const formattedDate = useMemo(() => formatLongDate(now), [now]);
+
+  const metrics = useMemo(() => {
+    const startOfToday = getStartOfToday(now);
+    const startOfWeek = getStartOfWeek(now);
+
+    const reviewedToday = reviewedReports.filter((report) => {
+      const reviewedAt = safeDate(report.reviewedAt || report.uploadedAt || report.lastModified);
+      return reviewedAt ? reviewedAt >= startOfToday : false;
+    }).length;
+
+    const reviewedThisWeek = reviewedReports.filter((report) => {
+      const reviewedAt = safeDate(report.reviewedAt || report.uploadedAt || report.lastModified);
+      return reviewedAt ? reviewedAt >= startOfWeek : false;
+    }).length;
+
+    const turnaroundSamples = reviewedReports
+      .map((report) => getTurnaroundMinutes(report))
+      .filter((value): value is number => value !== null);
+
+    const avgTurnaroundMinutes =
+      turnaroundSamples.length > 0
+        ? Math.round(turnaroundSamples.reduce((sum, value) => sum + value, 0) / turnaroundSamples.length)
+        : null;
+
+    return {
+      pendingCount: pendingReports.length,
+      reviewedToday,
+      reviewedThisWeek,
+      avgTurnaroundMinutes,
+    };
+  }, [now, pendingReports.length, reviewedReports]);
+
+  const alerts = useMemo(() => buildAlerts(pendingReports, now), [now, pendingReports]);
+  const pendingPreview = useMemo(() => pendingReports.slice(0, 5), [pendingReports]);
+  const reviewedPreview = useMemo(
+    () =>
+      [...reviewedReports]
+        .sort((a, b) => {
+          const aDate = safeDate(a.reviewedAt || a.uploadedAt || a.lastModified)?.getTime() || 0;
+          const bDate = safeDate(b.reviewedAt || b.uploadedAt || b.lastModified)?.getTime() || 0;
+          return bDate - aDate;
+        })
+        .slice(0, 6),
+    [reviewedReports]
+  );
+
+  const metricCards = [
+    {
+      key: "pending",
+      title: "Pending Reports",
+      value: String(metrics.pendingCount),
+      icon: FileClock,
+      accent: "from-orange-500 to-amber-500",
+    },
+    {
+      key: "today",
+      title: "Reviewed Today",
+      value: String(metrics.reviewedToday),
+      icon: CheckCircle2,
+      accent: "from-emerald-500 to-teal-500",
+    },
+    {
+      key: "week",
+      title: "Reviewed This Week",
+      value: String(metrics.reviewedThisWeek),
+      icon: CalendarDays,
+      accent: "from-cyan-500 to-blue-500",
+    },
   ];
 
-  // Mock doctor profile data
-  const doctorProfile: DoctorProfile = {
-    name: "Dr. Sarah Johnson",
-    specialization: "Cardiologist",
-    experience: "15+ Years",
-    rating: 4.8,
-    totalReviews: 124,
-    avatar: "👩‍⚕️"
-  };
-
-  // Mock earnings data
-  const earningsData: EarningsData = {
-    perReport: 50,
-    total: 6200,
-    today: 400,
-    weekly: 2100,
-    monthly: 6200,
-    todayReports: 8,
-    weeklyReports: 42,
-    monthlyReports: 124
-  };
-
-  // Mock recent reports with more data
-  const allReports: RecentReport[] = [
-    {
-      id: "RPT-001",
-      serialId: "SR-2024-001",
-      username: "johndoe",
-      patientName: "John Doe",
-      phoneNumber: "9876543210",
-      reportType: "ECG Report",
-      reviewedAt: "2024-01-24 10:30 AM",
-      earnings: 50,
-      status: 'completed'
-    },
-    {
-      id: "RPT-002", 
-      serialId: "SR-2024-002",
-      username: "janesmith",
-      patientName: "Jane Smith",
-      phoneNumber: "9876543211",
-      reportType: "Cardiac MRI",
-      reviewedAt: "2024-01-24 09:45 AM",
-      earnings: 50,
-      status: 'completed'
-    },
-    {
-      id: "RPT-003",
-      serialId: "SR-2024-003",
-      username: "robertbrown",
-      patientName: "Robert Brown",
-      phoneNumber: "9876543212",
-      reportType: "ECG Report",
-      reviewedAt: "2024-01-24 09:15 AM",
-      earnings: 50,
-      status: 'completed'
-    },
-    {
-      id: "RPT-004",
-      serialId: "SR-2024-004",
-      username: "emilydavis",
-      patientName: "Emily Davis",
-      phoneNumber: "9876543213",
-      reportType: "Stress Test",
-      reviewedAt: "2024-01-24 08:30 AM",
-      earnings: 50,
-      status: 'completed'
-    },
-    {
-      id: "RPT-005",
-      serialId: "SR-2024-005",
-      username: "michaelwilson",
-      patientName: "Michael Wilson",
-      phoneNumber: "9876543214",
-      reportType: "ECG Report", 
-      reviewedAt: "2024-01-24 08:00 AM",
-      earnings: 50,
-      status: 'completed'
-    },
-    {
-      id: "RPT-006",
-      serialId: "SR-2024-006",
-      username: "sarahjones",
-      patientName: "Sarah Jones",
-      phoneNumber: "9876543215",
-      reportType: "ECG Report",
-      reviewedAt: "2024-01-23 05:30 PM",
-      earnings: 50,
-      status: 'completed'
-    },
-    {
-      id: "RPT-007",
-      serialId: "SR-2024-007",
-      username: "davidlee",
-      patientName: "David Lee",
-      phoneNumber: "9876543216",
-      reportType: "Cardiac MRI",
-      reviewedAt: "2024-01-23 04:15 PM",
-      earnings: 50,
-      status: 'pending'
-    },
-    {
-      id: "RPT-008",
-      serialId: "SR-2024-008",
-      username: "lisawang",
-      patientName: "Lisa Wang",
-      phoneNumber: "9876543217",
-      reportType: "ECG Report",
-      reviewedAt: "2024-01-23 03:00 PM",
-      earnings: 50,
-      status: 'completed'
-    }
-  ];
-
-  // Filter reports based on filter state
-  const filteredReports = useMemo(() => {
-    return allReports.filter(report => {
-      const matchesSerialId = !filters.serialId || 
-        report.serialId.toLowerCase().includes(filters.serialId.toLowerCase());
-      const matchesUsername = !filters.username || 
-        report.username.toLowerCase().includes(filters.username.toLowerCase());
-      const matchesPhone = !filters.phoneNumber || 
-        report.phoneNumber.includes(filters.phoneNumber);
-      
-      return matchesSerialId && matchesUsername && matchesPhone;
+  if (metrics.avgTurnaroundMinutes !== null) {
+    metricCards.push({
+      key: "turnaround",
+      title: "Average Turnaround",
+      value: formatTurnaround(metrics.avgTurnaroundMinutes),
+      icon: Clock3,
+      accent: "from-violet-500 to-indigo-500",
     });
-  }, [filters]);
+  }
 
-  // Handle filter input changes
-  const handleFilterChange = (key: keyof FilterState, value: string) => {
-    setFilters(prev => ({
-      ...prev,
-      [key]: value
-    }));
-  };
-
-  // Handle numeric-only input for phone number
-  const handleNumericInput = (value: string) => {
-    const numericValue = value.replace(/[^0-9]/g, '');
-    handleFilterChange('phoneNumber', numericValue);
-  };
-
-  // Clear all filters
-  const clearFilters = () => {
-    setFilters({
-      serialId: '',
-      username: '',
-      phoneNumber: ''
-    });
-  };
-
-  // Check if any filter is active
-  const hasActiveFilters = filters.serialId || filters.username || filters.phoneNumber;
-
-  const getEarningsForPeriod = () => {
-    switch (selectedPeriod) {
-      case 'today':
-        return { amount: earningsData.today, reports: earningsData.todayReports };
-      case 'weekly':
-        return { amount: earningsData.weekly, reports: earningsData.weeklyReports };
-      case 'monthly':
-        return { amount: earningsData.monthly, reports: earningsData.monthlyReports };
-      default:
-        return { amount: 0, reports: 0 };
-    }
-  };
-
-  const currentPeriod = getEarningsForPeriod();
+  const isReportsActive = location.pathname === "/doctor/reports";
 
   return (
-    <div className="min-h-screen bg-slate-950">
-      <div className="flex">
-        {/* Left Sidebar Navigation */}
-        <motion.aside
-          initial={{ x: -20, opacity: 0 }}
-          animate={{ x: 0, opacity: 1 }}
-          transition={{ duration: 0.3 }}
-          className="hidden lg:flex lg:flex-col w-64 bg-slate-900/90 backdrop-blur-sm border-r border-white/10 h-screen sticky top-0"
-        >
-          <div className="p-6 border-b border-white/10 sticky top-0 bg-slate-900/90 backdrop-blur-sm">
-            <div className="flex items-center gap-3 mb-4">
-              <div className="w-10 h-10 bg-gradient-to-br from-brand-orange via-brand-electric to-brand-focus rounded-xl flex items-center justify-center shadow-lg shadow-brand-orange/20">
-                <Heart className="w-6 h-6 text-white" />
-              </div>
-              <div>
-                <h2 className="font-bold text-lg text-white">CARDIOX</h2>
-                <p className="text-xs text-white/60">ECG Reports</p>
-              </div>
+    <div className="doctor-workspace min-h-screen bg-slate-950 text-slate-50 flex" data-theme={theme}>
+      <motion.aside
+        initial={{ x: -280 }}
+        animate={{ x: 0 }}
+        className="doctor-sidebar fixed left-0 top-0 z-40 hidden h-screen w-64 border-r border-white/10 bg-gradient-to-b from-slate-900 via-slate-900 to-slate-950 shadow-2xl lg:flex lg:flex-col"
+      >
+        <div className="doctor-sidebar-header border-b border-white/10 p-6">
+          <div className="flex items-center gap-3">
+            <button
+              type="button"
+              onClick={toggleTheme}
+              className="rounded-xl bg-gradient-to-br from-brand-orange to-brand-electric p-2 shadow-glow transition-transform hover:scale-105"
+              aria-label={theme === "light" ? "Switch to dark theme" : "Switch to light theme"}
+              title={theme === "light" ? "Switch to dark theme" : "Switch to light theme"}
+            >
+              <Heart className="h-6 w-6 text-white" />
+            </button>
+            <div>
+              <h2 className="doctor-brand-title text-lg font-bold text-white">CARDIOX</h2>
+              <p className="doctor-brand-subtitle text-xs text-white/60">Doctor Workspace</p>
             </div>
           </div>
-          
-          <nav className="p-4 space-y-1">
-            {[
-              { name: 'Dashboard', icon: LayoutDashboard, id: 'dashboard', path: '/doctor' },
-              { name: 'Reports', icon: FileText, id: 'reports', path: '/doctor/reports' },
-            ].map((item) => (
-              <motion.button
-                key={item.id}
-                whileHover={{ x: 4 }}
-                whileTap={{ scale: 0.98 }}
-                onClick={() => {
-                  setActiveNav(item.id);
-                  navigate(item.path);
-                }}
-                className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all ${
-                  (item.id === 'reports' && location.pathname === '/doctor/reports') || 
-                  (item.id === 'dashboard' && location.pathname === '/doctor')
-                    ? 'bg-gradient-to-r from-brand-orange via-brand-electric to-brand-focus text-white shadow-glow'
-                    : 'text-white/70 hover:bg-white/10 hover:text-white'
-                }`}
-              >
-                <item.icon className="w-5 h-5" />
-                {item.name}
-              </motion.button>
-            ))}
-          </nav>
-          
-          <div className="p-4 border-t border-white/10 mt-auto">
+        </div>
+
+        <nav className="space-y-1 p-4">
+          {[
+            { name: "Dashboard", icon: LayoutDashboard, path: "/doctor" },
+            { name: "Reports", icon: FileText, path: "/doctor/reports" },
+          ].map((item) => (
             <motion.button
+              key={item.path}
               whileHover={{ x: 4 }}
               whileTap={{ scale: 0.98 }}
-              onClick={() => {
-                logout("doctor");
-                navigate('/login');
-              }}
-              className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium text-red-400 hover:bg-red-900/20 transition-all"
+              onClick={() => navigate(item.path)}
+              className={`w-full rounded-xl px-4 py-3 text-left text-sm font-medium transition-all ${
+                (!isReportsActive && item.path === "/doctor") || (isReportsActive && item.path === "/doctor/reports")
+                  ? "bg-gradient-to-r from-brand-orange via-brand-electric to-brand-focus text-white shadow-glow"
+                  : "doctor-nav-idle text-white/70 hover:bg-white/10 hover:text-white"
+              }`}
             >
-              <LogOut className="w-5 h-5" />
-              Logout
+              <div className="flex items-center gap-3">
+                <item.icon className="h-5 w-5" />
+                {item.name}
+              </div>
+            </motion.button>
+          ))}
+        </nav>
+
+        <div className="doctor-sidebar-footer mt-auto border-t border-white/10 p-4">
+          <motion.button
+            whileHover={{ x: 4 }}
+            whileTap={{ scale: 0.98 }}
+            onClick={() => {
+              logout("doctor");
+              navigate("/login");
+            }}
+            className="flex w-full items-center gap-3 rounded-xl px-4 py-3 text-sm font-medium text-red-400 transition-all hover:bg-red-900/20"
+          >
+            <LogOut className="h-5 w-5" />
+            Logout
+          </motion.button>
+        </div>
+      </motion.aside>
+
+      <div className="flex-1 lg:ml-64">
+        <div className="mx-auto max-w-7xl px-4 py-8 lg:px-6">
+          <div className="mb-6 flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+            <div>
+              <h1 className="doctor-page-title text-3xl font-bold text-white">Doctor Dashboard</h1>
+              <p className="doctor-page-subtitle mt-1 text-sm text-slate-400">Operational view for your assigned ECG work.</p>
+            </div>
+            <motion.button
+              whileHover={{ scale: 1.03 }}
+              whileTap={{ scale: 0.97 }}
+              onClick={() => void loadDashboard()}
+              className="doctor-refresh-button inline-flex items-center gap-2 self-start rounded-xl bg-slate-800 px-4 py-2.5 text-sm font-semibold text-slate-100 shadow hover:bg-slate-700"
+            >
+              <RefreshCcw size={16} />
+              Refresh
             </motion.button>
           </div>
-        </motion.aside>
 
-        {/* Main Content Area */}
-        <div className="flex-1 min-w-0">
-          <div className="p-4 lg:p-6 space-y-6">
-            {/* Header */}
-            <motion.div
-              initial={{ opacity: 0, y: -10 }}
-              animate={{ opacity: 1, y: 0 }}
-            >
-              <h1 className="text-3xl font-bold text-white mb-1">Dashboard</h1>
-              <p className="text-white/60">{formattedDate}</p>
-            </motion.div>
-
-            {/* Welcome Section with Profile Box */}
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.4 }}
-              className="glass-panel rounded-xl p-6"
-            >
-              <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
-                <div className="flex-1">
-                  <h2 className="text-2xl font-bold text-brand-orange mb-2">Welcome {doctorProfile.name.split(' ')[1]}!</h2>
-                  <p className="text-white/80">
-                    You have <span className="font-bold text-brand-electric">{earningsData.todayReports} reports</span> remaining today! 
-                    Remember to check documentation before review.
-                  </p>
-                </div>
-                {/* Profile Box - Replacing Stethoscope Icon */}
-                <div className="bg-white/5 border border-white/10 rounded-xl p-4 backdrop-blur-sm min-w-[200px]">
-                  <div className="flex flex-col items-center">
-                    <div className="relative mb-3">
-                      <div className="w-16 h-16 rounded-full overflow-hidden border-2 border-brand-orange/50 shadow-lg">
-                        <img 
-                          src={doctorImage} 
-                          alt={doctorProfile.name}
-                          className="w-full h-full object-cover"
-                          onError={(e) => {
-                            const target = e.target as HTMLImageElement;
-                            target.style.display = 'none';
-                            if (target.parentElement) {
-                              target.parentElement.innerHTML = `<div class="w-full h-full flex items-center justify-center text-2xl bg-gradient-to-br from-brand-orange/20 to-brand-electric/20">${doctorProfile.avatar}</div>`;
-                            }
-                          }}
-                        />
-                      </div>
-                      <div className="absolute -bottom-1 -right-1 bg-brand-orange rounded-full p-1 shadow-lg border-2 border-slate-950">
-                        <CheckCircle className="w-3 h-3 text-white" />
-                      </div>
-                    </div>
-                    <h4 className="text-sm font-bold text-white mb-1">{doctorProfile.name}</h4>
-                    <p className="text-xs text-white/60 mb-3">{doctorProfile.specialization}</p>
-                    <div className="w-full space-y-2">
-                      <div className="flex items-center justify-between p-2 bg-white/5 rounded-lg border border-white/10">
-                        <span className="text-xs text-white/70">Rating</span>
-                        <div className="flex items-center gap-1">
-                          <Star className="w-3 h-3 text-brand-orange fill-current" />
-                          <span className="text-xs font-bold text-white">{doctorProfile.rating}</span>
-                        </div>
-                      </div>
-                      <div className="flex items-center justify-between p-2 bg-white/5 rounded-lg border border-white/10">
-                        <span className="text-xs text-white/70">Patients</span>
-                        <span className="text-xs font-bold text-white">{doctorProfile.totalReviews}</span>
-                      </div>
-                    </div>
-                  </div>
-                </div>
+          {loading ? (
+            <div className="space-y-6">
+              <div className="h-48 animate-pulse rounded-3xl border border-white/10 bg-white/5" />
+              <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+                {[...Array(4)].map((_, index) => (
+                  <div key={index} className="h-32 animate-pulse rounded-2xl border border-white/10 bg-white/5" />
+                ))}
               </div>
-            </motion.div>
-
-            {/* Earnings Overview Cards */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-              <motion.div
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.3, delay: 0.1 }}
-                whileHover={{ y: -4, scale: 1.02 }}
-                className="glass-panel rounded-xl p-6 hover:shadow-glow transition-all duration-200 relative overflow-hidden"
-              >
-                <div className="absolute top-0 right-0 w-20 h-20 bg-brand-orange/10 rounded-full -mr-10 -mt-10"></div>
-                <div className="relative">
-                  <div className="flex items-center justify-between mb-4">
-                    <div className="p-3 bg-gradient-to-br from-brand-orange to-brand-electric rounded-xl shadow-md">
-                      <Sparkles className="w-6 h-6 text-white" />
-                    </div>
-                    <span className="text-xs font-semibold text-brand-orange flex items-center bg-brand-orange/10 px-3 py-1.5 rounded-full border border-brand-orange/20">
-                      <TrendingUp className="w-3.5 h-3.5 mr-1" />
-                      +{earningsGrowth}%
-                    </span>
-                  </div>
-                  <p className="text-sm font-medium text-white/70 mb-2">Per Report</p>
-                  <h2 className="text-3xl font-bold text-white">₹{earningsData.perReport}</h2>
-                </div>
-              </motion.div>
-
-              <motion.div
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.3, delay: 0.15 }}
-                whileHover={{ y: -4, scale: 1.02 }}
-                className="glass-panel rounded-xl p-6 hover:shadow-glow transition-all duration-200 relative overflow-hidden"
-              >
-                <div className="absolute top-0 right-0 w-20 h-20 bg-brand-electric/10 rounded-full -mr-10 -mt-10"></div>
-                <div className="relative">
-                  <div className="flex items-center justify-between mb-4">
-                    <div className="p-3 bg-gradient-to-br from-brand-electric to-brand-focus rounded-xl shadow-md">
-                      <BarChart3 className="w-6 h-6 text-white" />
-                    </div>
-                    <span className="text-xs font-semibold text-brand-electric bg-brand-electric/10 px-3 py-1.5 rounded-full border border-brand-electric/20">Total</span>
-                  </div>
-                  <p className="text-sm font-medium text-white/70 mb-2">Total Earnings</p>
-                  <h2 className="text-3xl font-bold text-white">₹{earningsData.total.toLocaleString()}</h2>
-                </div>
-              </motion.div>
-
-              <motion.div
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.3, delay: 0.2 }}
-                whileHover={{ y: -4, scale: 1.02 }}
-                className="glass-panel rounded-xl p-6 hover:shadow-glow transition-all duration-200 relative overflow-hidden"
-              >
-                <div className="absolute top-0 right-0 w-20 h-20 bg-brand-orange/10 rounded-full -mr-10 -mt-10"></div>
-                <div className="relative">
-                  <div className="flex items-center justify-between mb-4">
-                    <div className="p-3 bg-gradient-to-br from-brand-orange to-brand-electric rounded-xl shadow-md">
-                      <Zap className="w-6 h-6 text-white" />
-                    </div>
-                    <span className="text-xs font-semibold text-brand-orange bg-brand-orange/10 px-3 py-1.5 rounded-full border border-brand-orange/20">Today</span>
-                  </div>
-                  <p className="text-sm font-medium text-white/70 mb-2">Today's Earnings</p>
-                  <h2 className="text-3xl font-bold text-white">₹{earningsData.today}</h2>
-                </div>
-              </motion.div>
-
-              <motion.div
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.3, delay: 0.25 }}
-                whileHover={{ y: -4, scale: 1.02 }}
-                className="glass-panel rounded-xl p-6 hover:shadow-glow transition-all duration-200 relative overflow-hidden"
-              >
-                <div className="absolute top-0 right-0 w-20 h-20 bg-brand-focus/10 rounded-full -mr-10 -mt-10"></div>
-                <div className="relative">
-                  <div className="flex items-center justify-between mb-4">
-                    <div className="p-3 bg-gradient-to-br from-brand-focus to-brand-orange rounded-xl shadow-md">
-                      <Activity className="w-6 h-6 text-white" />
-                    </div>
-                    <span className="text-xs font-semibold text-brand-focus bg-brand-focus/10 px-3 py-1.5 rounded-full border border-brand-focus/20">This Week</span>
-                  </div>
-                  <p className="text-sm font-medium text-white/70 mb-2">Weekly Earnings</p>
-                  <h2 className="text-3xl font-bold text-white">₹{earningsData.weekly}</h2>
-                </div>
-              </motion.div>
+              <div className="grid gap-6 xl:grid-cols-3">
+                <div className="h-96 animate-pulse rounded-2xl border border-white/10 bg-white/5 xl:col-span-2" />
+                <div className="h-64 animate-pulse rounded-2xl border border-white/10 bg-white/5" />
+              </div>
             </div>
-
-            {/* Main Content Grid */}
-            <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
-              {/* Left Column - Earnings Overview & Reports */}
-              <div className="xl:col-span-2 space-y-6">
-                {/* Earnings Overview */}
-                <motion.div
-                  initial={{ opacity: 0, x: -20 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  transition={{ duration: 0.4, delay: 0.3 }}
-                  className="glass-panel rounded-xl p-6"
-                >
-                  <div className="flex items-center justify-between mb-6">
-                    <div className="flex items-center gap-2">
-                      <div className="p-2 bg-brand-orange/20 rounded-lg border border-brand-orange/30">
-                        <DollarSign className="w-5 h-5 text-brand-orange" />
-                      </div>
-                      <h2 className="text-xl font-bold text-white">Earnings Overview</h2>
+          ) : error ? (
+            <div className="rounded-3xl border border-rose-500/20 bg-rose-500/10 p-8 text-center">
+              <AlertTriangle className="mx-auto h-10 w-10 text-rose-300" />
+              <h2 className="mt-4 text-xl font-semibold text-white">Unable to load dashboard</h2>
+              <p className="mt-2 text-sm text-rose-100/90">{error}</p>
+              <button
+                type="button"
+                onClick={() => void loadDashboard()}
+                className="mt-5 rounded-xl bg-white px-4 py-2 text-sm font-semibold text-slate-900 hover:bg-slate-100"
+              >
+                Try again
+              </button>
+            </div>
+          ) : (
+            <div className="space-y-6">
+              <motion.section
+                initial={{ opacity: 0, y: 16 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="doctor-hero-card overflow-hidden rounded-[28px] border border-white/10 bg-gradient-to-br from-slate-900 via-slate-900 to-slate-800"
+              >
+                <div className="grid gap-6 p-6 lg:grid-cols-[1.2fr_0.8fr] lg:p-8">
+                  <div className="space-y-4">
+                    <div className="inline-flex items-center gap-2 rounded-full border border-cyan-400/20 bg-cyan-400/10 px-3 py-1 text-xs font-medium uppercase tracking-[0.18em] text-cyan-100">
+                      <Stethoscope className="h-3.5 w-3.5" />
+                      Logged-in doctor view
                     </div>
-                    <div className="flex bg-white/5 rounded-lg p-1 border border-white/10 backdrop-blur-sm">
-                      {(['today', 'weekly', 'monthly'] as const).map((period) => (
-                        <button
-                          key={period}
-                          onClick={() => setSelectedPeriod(period)}
-                          className={`px-4 py-2 rounded-md text-sm font-medium transition-all duration-200 ${
-                            selectedPeriod === period
-                              ? 'bg-gradient-to-r from-brand-orange via-brand-electric to-brand-focus text-white shadow-glow'
-                              : 'text-white/70 hover:text-white hover:bg-white/10'
-                          }`}
-                        >
-                          {period.charAt(0).toUpperCase() + period.slice(1)}
-                        </button>
+                    <div>
+                      <h2 className="doctor-card-title text-3xl font-semibold text-white">Welcome, {user?.name || "Doctor"}</h2>
+                      <p className="doctor-muted mt-2 text-sm text-slate-300">{formattedDate}</p>
+                    </div>
+                    <p className="doctor-muted max-w-2xl text-sm leading-7 text-slate-300">
+                      You have <span className="doctor-card-title font-semibold text-white">{metrics.pendingCount} pending reports</span> and{" "}
+                      <span className="doctor-card-title font-semibold text-white">{metrics.reviewedToday} reviewed today</span>.
+                    </p>
+                  </div>
+
+                  <div className="doctor-profile-card rounded-3xl border border-white/10 bg-white/5 p-5 backdrop-blur-sm">
+                    <div className="flex items-center gap-4">
+                      <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br from-orange-500/25 to-cyan-500/25 text-white">
+                        <UserCircle2 className="h-9 w-9" />
+                      </div>
+                      <div>
+                        <h3 className="doctor-card-title text-lg font-semibold text-white">{user?.name || "Doctor"}</h3>
+                        <p className="doctor-muted text-sm text-slate-400">Doctor session</p>
+                      </div>
+                    </div>
+                    {user?.email && (
+                      <div className="doctor-profile-inner mt-4 flex items-center gap-2 rounded-2xl border border-white/10 bg-slate-950/35 px-4 py-3 text-sm text-slate-200">
+                        <Mail className="h-4 w-4 text-cyan-300" />
+                        {user.email}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </motion.section>
+
+              <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+                {metricCards.map((card, index) => (
+                  <motion.div
+                    key={card.key}
+                    initial={{ opacity: 0, y: 16 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: index * 0.06 }}
+                    className="doctor-metric-card rounded-2xl border border-white/10 bg-slate-900/80 p-5 shadow-xl"
+                  >
+                    <div className="mb-4 flex items-center justify-between">
+                      <div className={`rounded-2xl bg-gradient-to-br ${card.accent} p-3 text-white shadow-lg`}>
+                        <card.icon className="h-5 w-5" />
+                      </div>
+                    </div>
+                    <p className="doctor-muted text-sm text-slate-400">{card.title}</p>
+                    <div className="doctor-card-title mt-2 text-3xl font-semibold text-white">{card.value}</div>
+                  </motion.div>
+                ))}
+              </div>
+
+              <div className="grid gap-6 xl:grid-cols-3">
+                <motion.section
+                  initial={{ opacity: 0, y: 18 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className="doctor-panel overflow-hidden rounded-2xl border border-white/10 bg-slate-900/75 shadow-xl xl:col-span-2"
+                >
+                  <div className="doctor-panel-divider flex items-center justify-between border-b border-white/10 px-5 py-4">
+                    <div>
+                      <h2 className="doctor-table-title text-lg font-semibold text-white">Pending Queue Preview</h2>
+                      <p className="doctor-muted text-xs text-slate-400">Top pending reports assigned to you</p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => navigate("/doctor/reports")}
+                      className="inline-flex items-center gap-1 text-sm font-medium text-brand-orange hover:text-brand-electric"
+                    >
+                      View full queue
+                      <ArrowRight className="h-4 w-4" />
+                    </button>
+                  </div>
+
+                  {pendingPreview.length === 0 ? (
+                    <div className="flex flex-col items-center justify-center px-6 py-16 text-center">
+                      <FileClock className="mb-3 h-10 w-10 text-slate-700" />
+                      <h3 className="text-base font-semibold text-white">No pending reports</h3>
+                      <p className="mt-2 text-sm text-slate-400">You are all caught up for now.</p>
+                    </div>
+                  ) : (
+                    <div className="overflow-x-auto">
+                      <table className="min-w-full divide-y divide-white/10 text-sm">
+                        <thead className="doctor-table-head bg-slate-900/80">
+                          <tr>
+                            <th className="doctor-table-heading px-5 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-400">Report</th>
+                            <th className="doctor-table-heading px-5 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-400">Patient</th>
+                            <th className="doctor-table-heading px-5 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-400">Assigned</th>
+                            <th className="doctor-table-heading px-5 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-400">Status</th>
+                            <th className="doctor-table-heading px-5 py-3 text-right text-xs font-semibold uppercase tracking-wide text-slate-400">Action</th>
+                          </tr>
+                        </thead>
+                        <tbody className="doctor-table-body divide-y divide-white/10">
+                          {pendingPreview.map((report) => (
+                            <tr key={report.id} className="doctor-table-row hover:bg-white/5">
+                              <td className="px-5 py-4">
+                                <div className="doctor-table-cell-strong font-medium text-white">{report.fileName}</div>
+                                <div className="text-xs text-slate-500">{report.reportType || "ECG"}</div>
+                              </td>
+                              <td className="doctor-table-cell px-5 py-4 text-slate-300">{report.patientName || "--"}</td>
+                              <td className="doctor-table-cell px-5 py-4 text-slate-300">
+                                {formatDateTime(report.assignedAt || report.lastModified || report.uploadedAt)}
+                              </td>
+                              <td className="px-5 py-4">
+                                <span className="inline-flex items-center rounded-full border border-amber-500/20 bg-amber-500/10 px-3 py-1 text-xs font-medium text-amber-300">
+                                  {report.status || "pending"}
+                                </span>
+                              </td>
+                              <td className="px-5 py-4 text-right">
+                                <div className="flex justify-end gap-2">
+                                  <button
+                                    type="button"
+                                    onClick={() => navigate("/doctor/reports")}
+                                    className="rounded-lg bg-gradient-to-r from-orange-500 to-amber-500 px-3 py-1.5 text-xs font-semibold text-white hover:from-orange-600 hover:to-amber-600"
+                                  >
+                                    Review now
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => report.url && window.open(report.url, "_blank")}
+                                    disabled={!report.url}
+                                    className="doctor-secondary-button inline-flex items-center gap-1 rounded-lg bg-slate-800 px-3 py-1.5 text-xs font-medium text-slate-100 hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-50"
+                                  >
+                                    <Eye className="h-3.5 w-3.5" />
+                                    Open
+                                  </button>
+                                </div>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </motion.section>
+
+                {alerts.length > 0 && (
+                  <motion.section
+                    initial={{ opacity: 0, y: 18 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className="doctor-alert-card rounded-2xl border border-white/10 bg-slate-900/75 p-5 shadow-xl"
+                  >
+                    <div className="mb-4 flex items-center gap-2">
+                      <div className="rounded-xl bg-amber-500/15 p-2 text-amber-300">
+                        <AlertTriangle className="h-5 w-5" />
+                      </div>
+                      <div>
+                        <h2 className="doctor-card-title text-lg font-semibold text-white">Reminders</h2>
+                        <p className="doctor-muted text-xs text-slate-400">Derived from your current queue</p>
+                      </div>
+                    </div>
+                    <div className="space-y-3">
+                      {alerts.map((alert) => (
+                        <div key={alert.message} className="doctor-alert-inner rounded-2xl border border-white/10 bg-white/5 p-4">
+                          <p className="doctor-table-cell text-sm leading-6 text-slate-200">{alert.message}</p>
+                        </div>
                       ))}
                     </div>
-                  </div>
-                  
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <motion.div
-                      whileHover={{ scale: 1.02 }}
-                      className="bg-gradient-to-br from-brand-orange via-brand-electric to-brand-focus rounded-xl p-6 text-white shadow-glow"
-                    >
-                      <div className="flex items-center justify-between mb-4">
-                        <DollarSign className="w-8 h-8" />
-                      </div>
-                      <div className="text-3xl font-bold mb-1">₹{currentPeriod.amount.toLocaleString()}</div>
-                      <div className="text-white/80 text-sm mb-2">Earnings this {selectedPeriod}</div>
-                      <div className="text-xs text-white/70 bg-white/10 px-3 py-1.5 rounded-full inline-block">
-                        {currentPeriod.reports} reports reviewed
-                      </div>
-                    </motion.div>
-                    
-                    <motion.div
-                      whileHover={{ scale: 1.02 }}
-                      className="bg-gradient-to-br from-brand-electric via-brand-focus to-brand-orange rounded-xl p-6 text-white shadow-glow"
-                    >
-                      <div className="flex items-center justify-between mb-4">
-                        <FileText className="w-8 h-8" />
-                      </div>
-                      <div className="text-3xl font-bold mb-1">{currentPeriod.reports}</div>
-                      <div className="text-white/80 text-sm mb-2">Reports Reviewed</div>
-                      <div className="text-xs text-white/70 bg-white/10 px-3 py-1.5 rounded-full inline-block">
-                        ₹{earningsData.perReport} per report
-                      </div>
-                    </motion.div>
-                  </div>
-                </motion.div>
+                  </motion.section>
+                )}
+              </div>
 
-                {/* Recent Reports Table with Filters */}
-                <motion.div
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ duration: 0.4, delay: 0.4 }}
-                  className="glass-panel rounded-xl p-6"
-                >
-                  <div className="flex items-center justify-between mb-6">
-                    <div className="flex items-center gap-2">
-                      <div className="p-2 bg-brand-orange/20 rounded-lg border border-brand-orange/30">
-                        <FileText className="w-5 h-5 text-brand-orange" />
-                      </div>
-                      <h2 className="text-xl font-bold text-white">Recently Reviewed Reports</h2>
-                      {hasActiveFilters && (
-                        <span className="ml-2 bg-brand-orange/20 text-brand-orange text-xs font-semibold px-2.5 py-1 rounded-full border border-brand-orange/30">
-                          {filteredReports.length} found
-                        </span>
-                      )}
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <motion.button
-                        whileHover={{ scale: 1.05 }}
-                        whileTap={{ scale: 0.95 }}
-                        onClick={() => setShowFilters(!showFilters)}
-                        className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${
-                          showFilters || hasActiveFilters
-                            ? 'bg-brand-orange/20 text-brand-orange border border-brand-orange/30'
-                            : 'bg-white/5 text-white/70 border border-white/10 hover:bg-white/10 hover:text-white'
-                        }`}
-                      >
-                        <Filter className="w-4 h-4" />
-                        Filters
-                      </motion.button>
-                      <button className="text-sm font-medium text-brand-orange hover:text-brand-electric flex items-center gap-1 transition-colors">
-                        View All
-                        <ChevronRight className="w-4 h-4" />
-                      </button>
-                    </div>
+              <motion.section
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="doctor-panel overflow-hidden rounded-2xl border border-white/10 bg-slate-900/75 shadow-xl"
+              >
+                <div className="doctor-panel-divider flex items-center justify-between border-b border-white/10 px-5 py-4">
+                  <div>
+                    <h2 className="doctor-table-title text-lg font-semibold text-white">Recent Reviewed Reports</h2>
                   </div>
+                  <button
+                    type="button"
+                    onClick={() => navigate("/doctor/reports")}
+                    className="inline-flex items-center gap-1 text-sm font-medium text-brand-orange hover:text-brand-electric"
+                  >
+                    Open reports
+                    <ArrowRight className="h-4 w-4" />
+                  </button>
+                </div>
 
-                  {/* Filter Section */}
-                  {showFilters && (
-                    <motion.div
-                      initial={{ opacity: 0, height: 0 }}
-                      animate={{ opacity: 1, height: 'auto' }}
-                      exit={{ opacity: 0, height: 0 }}
-                      className="mb-6 bg-white/5 rounded-lg border border-white/10 p-4"
-                    >
-                      <div className="flex items-center justify-between mb-4">
-                        <div className="flex items-center gap-2">
-                          <Search className="w-4 h-4 text-brand-orange" />
-                          <h3 className="text-sm font-semibold text-white">Filter Reports</h3>
-                        </div>
-                        {hasActiveFilters && (
-                          <button
-                            onClick={clearFilters}
-                            className="text-xs text-brand-orange hover:text-brand-electric flex items-center gap-1 transition-colors"
-                          >
-                            <X className="w-3 h-3" />
-                            Clear All
-                          </button>
-                        )}
-                      </div>
-                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                        <div>
-                          <label className="block text-xs font-medium text-white/70 mb-2">Serial ID</label>
-                          <div className="relative">
-                            <input
-                              type="text"
-                              value={filters.serialId}
-                              onChange={(e) => handleFilterChange('serialId', e.target.value)}
-                              placeholder="Enter serial ID"
-                              className="w-full bg-white/5 border border-white/10 rounded-lg px-4 py-2.5 text-sm text-white placeholder-white/40 focus:outline-none focus:ring-2 focus:ring-brand-orange/50 focus:border-brand-orange/50 transition-all"
-                            />
-                            {filters.serialId && (
-                              <button
-                                onClick={() => handleFilterChange('serialId', '')}
-                                className="absolute right-2 top-1/2 -translate-y-1/2 text-white/40 hover:text-white"
-                              >
-                                <X className="w-4 h-4" />
-                              </button>
-                            )}
-                          </div>
-                        </div>
-                        <div>
-                          <label className="block text-xs font-medium text-white/70 mb-2">Username</label>
-                          <div className="relative">
-                            <input
-                              type="text"
-                              value={filters.username}
-                              onChange={(e) => handleFilterChange('username', e.target.value)}
-                              placeholder="Enter username"
-                              className="w-full bg-white/5 border border-white/10 rounded-lg px-4 py-2.5 text-sm text-white placeholder-white/40 focus:outline-none focus:ring-2 focus:ring-brand-orange/50 focus:border-brand-orange/50 transition-all"
-                            />
-                            {filters.username && (
-                              <button
-                                onClick={() => handleFilterChange('username', '')}
-                                className="absolute right-2 top-1/2 -translate-y-1/2 text-white/40 hover:text-white"
-                              >
-                                <X className="w-4 h-4" />
-                              </button>
-                            )}
-                          </div>
-                        </div>
-                        <div>
-                          <label className="block text-xs font-medium text-white/70 mb-2">Phone Number</label>
-                          <div className="relative">
-                            <input
-                              type="tel"
-                              inputMode="numeric"
-                              pattern="[0-9]*"
-                              value={filters.phoneNumber}
-                              onChange={(e) => handleNumericInput(e.target.value)}
-                              placeholder="Enter phone number"
-                              className="w-full bg-white/5 border border-white/10 rounded-lg px-4 py-2.5 text-sm text-white placeholder-white/40 focus:outline-none focus:ring-2 focus:ring-brand-orange/50 focus:border-brand-orange/50 transition-all"
-                              onKeyPress={(e) => {
-                                if (!/[0-9]/.test(e.key) && e.key !== 'Enter' && e.key !== 'Backspace' && e.key !== 'Delete' && e.key !== 'Tab' && e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') {
-                                  e.preventDefault();
-                                }
-                              }}
-                              onPaste={(e) => {
-                                e.preventDefault();
-                                const pastedText = e.clipboardData.getData('text');
-                                handleNumericInput(pastedText);
-                              }}
-                            />
-                            {filters.phoneNumber && (
-                              <button
-                                onClick={() => handleFilterChange('phoneNumber', '')}
-                                className="absolute right-2 top-1/2 -translate-y-1/2 text-white/40 hover:text-white"
-                              >
-                                <X className="w-4 h-4" />
-                              </button>
-                            )}
-                          </div>
-                        </div>
-                      </div>
-                    </motion.div>
-                  )}
-                  
+                {reviewedPreview.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center px-6 py-16 text-center">
+                    <CheckCircle2 className="mb-3 h-10 w-10 text-slate-700" />
+                    <h3 className="text-base font-semibold text-white">No reviewed reports yet</h3>
+                    <p className="mt-2 text-sm text-slate-400">Completed reports will appear here once you review them.</p>
+                  </div>
+                ) : (
                   <div className="overflow-x-auto">
-                    <div className="bg-white/5 rounded-lg border border-white/10 overflow-hidden backdrop-blur-sm">
-                      {filteredReports.length === 0 ? (
-                        <div className="text-center py-12">
-                          <div className="w-16 h-16 mx-auto mb-4 bg-white/5 rounded-full flex items-center justify-center border border-white/10">
-                            <FileText className="w-8 h-8 text-white/30" />
-                          </div>
-                          <p className="text-white/60 font-medium">
-                            {hasActiveFilters ? 'No reports found matching your filters' : 'No reports available'}
-                          </p>
-                          {hasActiveFilters && (
-                            <button
-                              onClick={clearFilters}
-                              className="mt-4 text-brand-orange hover:text-brand-electric text-sm font-medium transition-colors"
-                            >
-                              Clear filters to see all reports
-                            </button>
-                          )}
-                        </div>
-                      ) : (
-                        <table className="w-full">
-                          <thead>
-                            <tr className="bg-white/5 border-b border-white/10">
-                              <th className="text-left py-3 px-4 text-xs font-semibold text-white/70 uppercase tracking-wider">Serial ID</th>
-                              <th className="text-left py-3 px-4 text-xs font-semibold text-white/70 uppercase tracking-wider">Username</th>
-                              <th className="text-left py-3 px-4 text-xs font-semibold text-white/70 uppercase tracking-wider">Patient Name</th>
-                              <th className="text-left py-3 px-4 text-xs font-semibold text-white/70 uppercase tracking-wider">Phone</th>
-                              <th className="text-left py-3 px-4 text-xs font-semibold text-white/70 uppercase tracking-wider">Report Type</th>
-                              <th className="text-left py-3 px-4 text-xs font-semibold text-white/70 uppercase tracking-wider">Reviewed At</th>
-                              <th className="text-left py-3 px-4 text-xs font-semibold text-white/70 uppercase tracking-wider">Earnings</th>
-                              <th className="text-left py-3 px-4 text-xs font-semibold text-white/70 uppercase tracking-wider">Status</th>
-                            </tr>
-                          </thead>
-                          <tbody className="divide-y divide-white/10">
-                            {filteredReports.map((report, index) => (
-                              <motion.tr
-                                key={report.id}
-                                initial={{ opacity: 0, x: -20 }}
-                                animate={{ opacity: 1, x: 0 }}
-                                transition={{ duration: 0.3, delay: 0.45 + index * 0.05 }}
-                                whileHover={{ backgroundColor: 'rgba(255, 255, 255, 0.05)' }}
-                                className="border-b border-white/10 hover:bg-white/5 transition-colors cursor-pointer"
+                    <table className="min-w-full divide-y divide-white/10 text-sm">
+                      <thead className="doctor-table-head bg-slate-900/80">
+                        <tr>
+                          <th className="doctor-table-heading px-5 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-400">Report</th>
+                          <th className="doctor-table-heading px-5 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-400">Patient</th>
+                          <th className="doctor-table-heading px-5 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-400">Type</th>
+                          <th className="doctor-table-heading px-5 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-400">Reviewed At</th>
+                          <th className="doctor-table-heading px-5 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-400">Status</th>
+                          <th className="doctor-table-heading px-5 py-3 text-right text-xs font-semibold uppercase tracking-wide text-slate-400">Action</th>
+                        </tr>
+                      </thead>
+                      <tbody className="doctor-table-body divide-y divide-white/10">
+                        {reviewedPreview.map((report) => (
+                          <tr key={report.id} className="doctor-table-row hover:bg-white/5">
+                            <td className="px-5 py-4">
+                              <div className="doctor-table-cell-strong font-medium text-white">{report.fileName}</div>
+                            </td>
+                            <td className="doctor-table-cell px-5 py-4 text-slate-300">{report.patientName || "--"}</td>
+                            <td className="doctor-table-cell px-5 py-4 text-slate-300">{report.reportType || "ECG"}</td>
+                            <td className="doctor-table-cell px-5 py-4 text-slate-300">
+                              {formatDateTime(report.reviewedAt || report.uploadedAt || report.lastModified)}
+                            </td>
+                            <td className="px-5 py-4">
+                              <span className="inline-flex items-center rounded-full border border-emerald-500/20 bg-emerald-500/10 px-3 py-1 text-xs font-medium text-emerald-300">
+                                {report.status || "reviewed"}
+                              </span>
+                            </td>
+                            <td className="px-5 py-4 text-right">
+                              <button
+                                type="button"
+                                onClick={() => report.url && window.open(report.url, "_blank")}
+                                disabled={!report.url}
+                                className="doctor-secondary-button inline-flex items-center gap-1 rounded-lg bg-slate-800 px-3 py-1.5 text-xs font-medium text-slate-100 hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-50"
                               >
-                                <td className="py-4 px-4">
-                                  <span className="text-sm font-medium text-brand-orange">{report.serialId}</span>
-                                </td>
-                                <td className="py-4 px-4">
-                                  <span className="text-sm font-medium text-white/90">{report.username}</span>
-                                </td>
-                                <td className="py-4 px-4">
-                                  <div className="flex items-center gap-2">
-                                    <div className="w-8 h-8 rounded-full bg-gradient-to-br from-brand-orange/20 to-brand-electric/20 flex items-center justify-center border border-brand-orange/30">
-                                      <User className="w-4 h-4 text-brand-orange" />
-                                    </div>
-                                    <span className="text-sm font-medium text-white">{report.patientName}</span>
-                                  </div>
-                                </td>
-                                <td className="py-4 px-4">
-                                  <span className="text-sm text-white/70">{report.phoneNumber}</span>
-                                </td>
-                                <td className="py-4 px-4">
-                                  <span className="text-sm text-white/70">{report.reportType}</span>
-                                </td>
-                                <td className="py-4 px-4">
-                                  <span className="text-sm text-white/70">{report.reviewedAt}</span>
-                                </td>
-                                <td className="py-4 px-4">
-                                  <span className="text-sm font-semibold text-brand-orange flex items-center gap-1">
-                                    <DollarSign className="w-4 h-4" />
-                                    {report.earnings}
-                                  </span>
-                                </td>
-                                <td className="py-4 px-4">
-                                  <span className={`inline-flex items-center px-3 py-1.5 rounded-full text-xs font-medium ${
-                                    report.status === 'completed' 
-                                      ? 'bg-brand-orange/20 text-brand-orange border border-brand-orange/30' 
-                                      : 'bg-yellow-500/20 text-yellow-400 border border-yellow-500/30'
-                                  }`}>
-                                    {report.status === 'completed' ? (
-                                      <CheckCircle className="w-3.5 h-3.5 mr-1.5" />
-                                    ) : (
-                                      <AlertCircle className="w-3.5 h-3.5 mr-1.5" />
-                                    )}
-                                    {report.status.charAt(0).toUpperCase() + report.status.slice(1)}
-                                  </span>
-                                </td>
-                              </motion.tr>
-                            ))}
-                          </tbody>
-                        </table>
-                      )}
-                    </div>
+                                <Eye className="h-3.5 w-3.5" />
+                                View
+                              </button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
                   </div>
-                </motion.div>
-              </div>
-
-              {/* Right Column - Alerts & Performance (Profile moved to welcome section) */}
-              <div className="space-y-6">
-                {/* Alerts Card - Below Profile */}
-                <motion.div
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: 0.3 }}
-                  className="glass-panel rounded-xl p-6"
-                >
-                  <div className="flex items-center justify-between mb-4">
-                    <div className="flex items-center gap-2">
-                      <div className="p-2 bg-brand-orange/20 rounded-lg border border-brand-orange/30">
-                        <Bell className="w-5 h-5 text-brand-orange" />
-                      </div>
-                      <h3 className="text-lg font-bold text-white">Alerts</h3>
-                    </div>
-                    <span className="bg-red-500/20 text-red-400 text-xs font-semibold px-2.5 py-1 rounded-full border border-red-500/30">
-                      {alerts.length}
-                    </span>
-                  </div>
-                  <div className="space-y-3">
-                    {alerts.map((alert, index) => (
-                      <motion.div
-                        key={alert.id}
-                        initial={{ opacity: 0, x: -10 }}
-                        animate={{ opacity: 1, x: 0 }}
-                        transition={{ delay: 0.4 + index * 0.1 }}
-                        whileHover={{ x: 4 }}
-                        className="flex items-start gap-3 p-3 bg-white/5 rounded-lg border border-white/10 hover:bg-white/10 transition-all cursor-pointer"
-                      >
-                        <div className="w-8 h-8 rounded-full bg-gradient-to-br from-brand-orange/20 to-brand-electric/20 flex items-center justify-center text-lg flex-shrink-0 border border-brand-orange/30">
-                          {alert.avatar}
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <p className="text-sm font-medium text-white truncate">{alert.message}</p>
-                          <p className="text-xs text-white/50 mt-1">{alert.time}</p>
-                        </div>
-                      </motion.div>
-                    ))}
-                  </div>
-                </motion.div>
-
-                {/* Performance Stats - Below Alerts */}
-                <motion.div
-                  initial={{ opacity: 0, x: 20 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  transition={{ duration: 0.4, delay: 0.35 }}
-                  className="glass-panel rounded-xl p-6"
-                >
-                  <div className="flex items-center gap-2 mb-6">
-                    <div className="p-2 bg-brand-electric/20 rounded-lg border border-brand-electric/30">
-                      <Activity className="w-5 h-5 text-brand-electric" />
-                    </div>
-                    <h2 className="text-xl font-bold text-white">Performance</h2>
-                  </div>
-                  <div className="space-y-4">
-                    <motion.div
-                      whileHover={{ x: 4 }}
-                      className="flex items-center justify-between p-3 bg-white/5 rounded-lg border border-white/10"
-                    >
-                      <div className="flex items-center gap-2">
-                        <Award className="w-5 h-5 text-brand-orange" />
-                        <span className="text-sm font-medium text-white/80">Avg. Reports/Day</span>
-                      </div>
-                      <span className="font-bold text-white">8.2</span>
-                    </motion.div>
-                    <motion.div
-                      whileHover={{ x: 4 }}
-                      className="flex items-center justify-between p-3 bg-white/5 rounded-lg border border-white/10"
-                    >
-                      <div className="flex items-center gap-2">
-                        <Clock className="w-5 h-5 text-brand-electric" />
-                        <span className="text-sm font-medium text-white/80">Avg. Review Time</span>
-                      </div>
-                      <span className="font-bold text-white">12 min</span>
-                    </motion.div>
-                    <motion.div
-                      whileHover={{ x: 4 }}
-                      className="flex items-center justify-between p-3 bg-white/5 rounded-lg border border-white/10"
-                    >
-                      <div className="flex items-center gap-2">
-                        <Star className="w-5 h-5 text-brand-focus" />
-                        <span className="text-sm font-medium text-white/80">Success Rate</span>
-                      </div>
-                      <span className="font-bold text-white">98.5%</span>
-                    </motion.div>
-                    <motion.div
-                      whileHover={{ x: 4 }}
-                      className="flex items-center justify-between p-3 bg-white/5 rounded-lg border border-white/10"
-                    >
-                      <div className="flex items-center gap-2">
-                        <TrendingUp className="w-5 h-5 text-brand-orange" />
-                        <span className="text-sm font-medium text-white/80">Monthly Growth</span>
-                      </div>
-                      <span className="font-bold text-brand-orange flex items-center">
-                        <TrendingUp className="w-4 h-4 mr-1" />
-                        +15%
-                      </span>
-                    </motion.div>
-                  </div>
-                </motion.div>
-              </div>
+                )}
+              </motion.section>
             </div>
-          </div>
+          )}
         </div>
       </div>
     </div>
