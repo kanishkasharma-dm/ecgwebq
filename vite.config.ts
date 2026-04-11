@@ -2,8 +2,74 @@ import { defineConfig, loadEnv } from "vite";
 import react from "@vitejs/plugin-react";
 import path from "path";
 
+function trimTrailingSlashes(value: string): string {
+  return value.replace(/\/+$/, "");
+}
+
+function ensureProdStage(baseUrl?: string): string {
+  const normalizedBase = trimTrailingSlashes((baseUrl || "").trim());
+
+  if (!normalizedBase) {
+    return normalizedBase;
+  }
+
+  if (normalizedBase.startsWith("/")) {
+    return normalizedBase;
+  }
+
+  try {
+    const parsedUrl = new URL(normalizedBase);
+    if (!parsedUrl.pathname || parsedUrl.pathname === "/") {
+      parsedUrl.pathname = "/prod";
+      return trimTrailingSlashes(parsedUrl.toString());
+    }
+  } catch {
+    // Keep the original value and let Vite surface invalid targets.
+  }
+
+  return normalizedBase;
+}
+
+function splitProxyTarget(baseUrl?: string): { target: string; basePath: string } {
+  const normalizedBase = ensureProdStage(baseUrl);
+
+  if (!normalizedBase) {
+    return { target: "", basePath: "" };
+  }
+
+  if (normalizedBase.startsWith("/")) {
+    return {
+      target: normalizedBase,
+      basePath: "",
+    };
+  }
+
+  try {
+    const parsedUrl = new URL(normalizedBase);
+    const basePath = parsedUrl.pathname && parsedUrl.pathname !== "/" ? trimTrailingSlashes(parsedUrl.pathname) : "";
+    parsedUrl.pathname = "";
+    parsedUrl.search = "";
+    parsedUrl.hash = "";
+
+    return {
+      target: trimTrailingSlashes(parsedUrl.toString()),
+      basePath,
+    };
+  } catch {
+    return {
+      target: normalizedBase,
+      basePath: "",
+    };
+  }
+}
+
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), "");
+  const adminAuthProxy = splitProxyTarget(env.VITE_ADMIN_AUTH_BASE_URL || env.VITE_API_BASE_URL);
+  const adminProtectedProxy = splitProxyTarget(
+    trimTrailingSlashes(env.VITE_ADMIN_PROTECTED_API_BASE_URL || env.VITE_API_BASE_URL || "")
+  );
+  const doctorAuthProxy = splitProxyTarget(env.VITE_DOCTOR_API_BASE_URL);
 
   return {
     plugins: [react()],
@@ -25,22 +91,25 @@ export default defineConfig(({ mode }) => {
       open: true,
       proxy: {
         "/__admin_auth": {
-          target: env.VITE_ADMIN_AUTH_BASE_URL || env.VITE_API_BASE_URL,
+          target: adminAuthProxy.target,
           changeOrigin: true,
           secure: true,
-          rewrite: (requestPath) => requestPath.replace(/^\/__admin_auth/, ""),
+          rewrite: (requestPath) =>
+            `${adminAuthProxy.basePath}${requestPath.replace(/^\/__admin_auth/, "")}`,
         },
         "/__admin_api": {
-          target: env.VITE_ADMIN_PROTECTED_API_BASE_URL || env.VITE_API_BASE_URL,
+          target: adminProtectedProxy.target,
           changeOrigin: true,
           secure: true,
-          rewrite: (requestPath) => requestPath.replace(/^\/__admin_api/, ""),
+          rewrite: (requestPath) =>
+            `${adminProtectedProxy.basePath}${requestPath.replace(/^\/__admin_api/, "")}`,
         },
         "/__doctor_api": {
-          target: env.VITE_DOCTOR_API_BASE_URL,
+          target: doctorAuthProxy.target,
           changeOrigin: true,
           secure: true,
-          rewrite: (requestPath) => requestPath.replace(/^\/__doctor_api/, ""),
+          rewrite: (requestPath) =>
+            `${doctorAuthProxy.basePath}${requestPath.replace(/^\/__doctor_api/, "")}`,
         },
       }
     }
