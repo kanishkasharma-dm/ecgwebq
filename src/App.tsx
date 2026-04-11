@@ -19,6 +19,7 @@ import { Footer } from "@/components/Footer";
 import NotificationContainer from "@/components/common/NotificationContainer";
 import { NotificationProvider } from "@/contexts/NotificationContext";
 import { AuthProvider } from "@/contexts/AuthContext";
+import { clearMalformedTokens } from "@/lib/auth";
  
 import { CardmiaChatbot } from "@/components/CardmiaChatbot";
 import { Routes, Route } from "react-router-dom";
@@ -62,6 +63,11 @@ function ScrollToHash() {
 }
 
 export default function App() {
+  // Clear any malformed tokens on app initialization
+  useEffect(() => {
+    clearMalformedTokens();
+  }, []);
+
   return (
     <AuthProvider>
       <NotificationProvider>
