@@ -50,7 +50,7 @@ export function getAdminProtectedApiBase(): string {
   return trimTrailingSlashes(
     import.meta.env.VITE_ADMIN_PROTECTED_API_BASE_URL ||
     import.meta.env.VITE_API_BASE_URL ||
-    "https://8m9fgt2fz1.execute-api.us-east-1.amazonaws.com"
+    "https://6jhix49qt6.execute-api.us-east-1.amazonaws.com/prod"
   );
 }
 
