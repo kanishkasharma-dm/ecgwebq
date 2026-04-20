@@ -21,6 +21,7 @@ import { NotificationProvider } from "@/contexts/NotificationContext";
 import { AuthProvider } from "@/contexts/AuthContext";
  
 import { CardmiaChatbot } from "@/components/CardmiaChatbot";
+import { SplashScreen } from "@/components/SplashScreen";
 import { Routes, Route } from "react-router-dom";
 import AdminLayout from "@/components/admin/layout/AdminLayout";
 import UsersPage from "@/components/admin/users/UsersPage";
@@ -64,6 +65,7 @@ function ScrollToHash() {
 export default function App() {
   return (
     <AuthProvider>
+      <SplashScreen />
       <NotificationProvider>
         <Routes>
         {/*normal url */}
