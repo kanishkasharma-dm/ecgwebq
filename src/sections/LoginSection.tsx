@@ -1,7 +1,7 @@
 import { motion } from "framer-motion";
 import { useNavigate } from "react-router-dom";
 import { Badge } from "@/components/ui/badge";
-import { Activity, ArrowRight } from "lucide-react";
+import { Activity, ArrowRight, Wind } from "lucide-react";
 
 export function LoginSection() {
   const navigate = useNavigate();
@@ -18,6 +18,19 @@ export function LoginSection() {
       cardBg: "bg-gradient-to-br from-orange-50/40 to-amber-50/30",
       borderColor: "border-orange-200/50",
       route: "/login",
+      isDisabled: false,
+    },
+    {
+      id: "cpap-bipap",
+      title: "Login for CPAP/BiPAP",
+      description: "Access CPAP and BiPAP therapy dashboards, reports, modes, and machine settings",
+      icon: Wind,
+      gradient: "from-teal-500 via-cyan-500 to-blue-500",
+      iconBg: "bg-teal-100",
+      iconColor: "text-teal-600",
+      cardBg: "bg-gradient-to-br from-teal-50/50 to-cyan-50/30",
+      borderColor: "border-teal-200/60",
+      route: "/cpap/login",
       isDisabled: false,
     },
   ];
@@ -40,7 +53,7 @@ export function LoginSection() {
         </p>
       </motion.div>
 
-      <div className="mx-auto grid max-w-3xl grid-cols-1 gap-6">
+      <div className="mx-auto grid max-w-5xl grid-cols-1 gap-6 md:grid-cols-2">
         {loginOptions.map((option, index) => {
           const Icon = option.icon;
           return (

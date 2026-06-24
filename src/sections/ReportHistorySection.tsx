@@ -13,7 +13,7 @@ const historyHighlights = [
 export function ReportHistorySection() {
   return (
     <section className="mx-auto max-w-[100rem] px-6 py-20 lg:px-8">
-      <div className="grid gap-6 lg:grid-cols-[1.35fr_0.85fr]">
+      <div className="grid gap-6 md:grid-cols-1 lg:grid-cols-[1.35fr_0.85fr]">
         <motion.div
           className="rounded-[32px] border border-white/10 bg-white/5 p-6 shadow-glow backdrop-blur-xl"
           initial={{ opacity: 0, y: 40 }}

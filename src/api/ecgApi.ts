@@ -78,15 +78,16 @@ export async function doctorLogin(doctorName: string, password: string) {
 async function apiRequest<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
   const base = API_BASE_URL.replace(/\/$/, '');
   const url = `${base}${endpoint}`;
+  const method = (options.method || 'GET').toUpperCase();
+  const hasJsonBody = Boolean(options.body) && !(options.body instanceof FormData);
 
-  const authHeaders = getAdminAuthHeaders();
+  const authHeaders = getAdminAuthHeaders(hasJsonBody);
   const headers: Record<string, string> = {
     ...(typeof authHeaders === 'object' && authHeaders !== null ? authHeaders as Record<string, string> : {}),
     ...(options.headers as Record<string, string> || {}),
   };
 
-  const method = (options.method || 'GET').toUpperCase();
-  if ((method === 'POST' || method === 'PUT' || method === 'PATCH') && !headers['Content-Type']) {
+  if ((method === 'POST' || method === 'PUT' || method === 'PATCH') && hasJsonBody && !headers['Content-Type']) {
     headers['Content-Type'] = 'application/json';
   }
 
@@ -370,9 +371,12 @@ export async function fetchS3Files(
   return response as S3FilesResponse;
 }
 
-export async function fetchS3FileContent<T = any>(key: string): Promise<T> {
-  const response = await apiRequest<{ success: boolean; data?: T; error?: { message: string; code: string } }>(`${ADMIN_ROUTES.s3FileContent}?key=${encodeURIComponent(key)}`);
-  
+function getS3FileContentUrl(key: string): string {
+  const base = API_BASE_URL.replace(/\/$/, '');
+  return `${base}${ADMIN_ROUTES.s3FileContent}?key=${encodeURIComponent(key)}`;
+}
+
+function unwrapS3FileContent<T>(response: { success?: boolean; data?: T; content?: T; body?: T; error?: { message?: string; code?: string } } | T): T {
   // Check if the response indicates an error
   if (response && typeof response === 'object') {
     if ('error' in response && response.error) {
@@ -386,16 +390,159 @@ export async function fetchS3FileContent<T = any>(key: string): Promise<T> {
     if ('data' in response && response.data !== undefined) {
       return response.data;
     }
+    if ('content' in response && response.content !== undefined) {
+      return response.content;
+    }
+    if ('body' in response && response.body !== undefined) {
+      return response.body;
+    }
   }
   
   // Fallback if the structure is different (though backend says it returns { success, data })
   return response as unknown as T;
 }
 
+async function fetchS3ContentResponse(url: string, headers: Record<string, string>): Promise<Response> {
+  // Always include auth headers from the start to avoid 403 errors
+  const authHeaders = getAdminAuthHeaders(false);
+  const requestHeaders: Record<string, string> = {
+    ...(typeof authHeaders === 'object' && authHeaders !== null ? authHeaders as Record<string, string> : {}),
+    ...headers,
+  };
+
+  const response = await fetch(url, { headers: requestHeaders });
+  return response;
+}
+
+// export async function fetchS3FileContent<T = any>(key: string): Promise<T> {
+//   const response = await fetchS3ContentResponse(getS3FileContentUrl(key), {
+//     Accept: 'application/json, text/plain, */*',
+//   });
+
+//   if (!response.ok) {
+//     throw new Error(`Preview request failed: ${response.statusText}`);
+//   }
+
+//   const contentType = response.headers.get('content-type') || '';
+
+//   if (contentType.includes('application/json')) {
+//     return unwrapS3FileContent<T>(await response.json());
+//   }
+
+//   return unwrapS3FileContent<T>(await response.text() as T);
+// }
+export async function fetchS3FileContent<T = any>(key: string): Promise<T> {
+  const response = await apiRequest<any>(
+    `${ADMIN_ROUTES.s3FileContent}?key=${encodeURIComponent(key)}`
+  );
+  return unwrapS3FileContent<T>(response);
+}
+
+function base64ToBlob(base64: string, mimeType: string): Blob {
+  const normalized = base64.includes(',') ? base64.split(',').pop() || '' : base64;
+  const binary = atob(normalized);
+  const bytes = new Uint8Array(binary.length);
+
+  for (let index = 0; index < binary.length; index += 1) {
+    bytes[index] = binary.charCodeAt(index);
+  }
+
+  return new Blob([bytes], { type: mimeType });
+}
+
+async function fetchBlobFromUrl(url: string, mimeType: string): Promise<Blob> {
+  const response = await fetch(url);
+
+  if (!response.ok) {
+    throw new Error(`Preview request failed: ${response.statusText}`);
+  }
+
+  const blob = await response.blob();
+  return blob.type ? blob : new Blob([blob], { type: mimeType });
+}
+
+// export async function fetchS3FileBlob(key: string, mimeType: string, fallbackUrl?: string): Promise<Blob> {
+//   const url = getS3FileContentUrl(key);
+//   const headers: Record<string, string> = {
+//     Accept: `${mimeType}, application/octet-stream, application/json, */*`,
+//   };
+
+//   try {
+//     const response = await fetchS3ContentResponse(url, headers);
+
+//     if (!response.ok) {
+//       throw new Error(`Preview request failed: ${response.statusText}`);
+//     }
+
+//     const contentType = response.headers.get('content-type') || '';
+
+//     if (contentType.includes('application/json')) {
+//       const payload = await response.json();
+
+//       if (payload?.error) {
+//         throw new Error(payload.error.message || 'API returned an error');
+//       }
+
+//       const data = payload?.data ?? payload;
+//       const base64 = typeof data === 'string'
+//         ? data
+//         : data?.base64 ?? data?.pdfBase64 ?? data?.contentBase64 ?? data?.body;
+//       const rawUrl = data?.url ?? data?.fileUrl ?? data?.presignedUrl ?? data?.downloadUrl;
+
+//       if (typeof base64 === 'string') {
+//         return base64ToBlob(base64, mimeType);
+//       }
+
+//       if (typeof rawUrl === 'string') {
+//         return fetchBlobFromUrl(rawUrl, mimeType);
+//       }
+
+//       throw new Error('Preview API did not return file content');
+//     }
+
+//     const blob = await response.blob();
+//     return blob.type ? blob : new Blob([blob], { type: mimeType });
+//   } catch (error) {
+//     if (fallbackUrl) {
+//       return fetchBlobFromUrl(fallbackUrl, mimeType);
+//     }
+//     throw error;
+//   }
+// }
+export async function fetchS3FileBlob(key: string, mimeType: string, fallbackUrl?: string): Promise<Blob> {
+  // If a presigned URL is available, use it directly — avoids CORS entirely
+  if (fallbackUrl) {
+    const response = await fetch(fallbackUrl);
+    if (!response.ok) throw new Error(`Preview request failed: ${response.statusText}`);
+    const blob = await response.blob();
+    return blob.type ? blob : new Blob([blob], { type: mimeType });
+  }
+
+  // Fallback: route through backend proxy
+  const response = await apiRequest<any>(
+    `${ADMIN_ROUTES.s3FileContent}?key=${encodeURIComponent(key)}`
+  );
+
+  const data = response?.data ?? response;
+  const base64 = typeof data === 'string'
+    ? data
+    : data?.base64 ?? data?.pdfBase64 ?? data?.contentBase64 ?? data?.body;
+  const rawUrl = data?.url ?? data?.fileUrl ?? data?.presignedUrl ?? data?.downloadUrl;
+
+  if (typeof base64 === 'string') return base64ToBlob(base64, mimeType);
+  if (typeof rawUrl === 'string') return fetchBlobFromUrl(rawUrl, mimeType);
+
+  throw new Error('Preview API did not return file content');
+}
+
 /* ======================= DOCTOR API ======================= */
 
 export interface DoctorReportSummary {
   id: string;
+  assignmentId: string;
+  doctorId: string;
+  deviceId: string;
+  status: string;
   key: string;
   fileName: string;
   url: string;
@@ -405,7 +552,7 @@ export interface DoctorReportSummary {
   reviewedAt?: string;
   patientName?: string;
   reportType?: string;
-  status?: string;
+  
 }
 
 function deriveFileName(key: string | undefined, fallback: string = "Report"): string {
@@ -428,6 +575,9 @@ function normalizeDoctorReportSummary(raw: any, fallbackStatus: "pending" | "rev
 
   return {
     id: String(raw?.id || raw?.reportId || key || fileName),
+    assignmentId: String(raw?.assignmentId || raw?.assignment_id || ""),
+    doctorId: String(raw?.doctorId || raw?.doctor_id || ""),
+    deviceId: String(raw?.deviceId || raw?.device_id || ""),
     key: String(key || fileName),
     fileName: String(fileName),
     url: String(raw?.url || raw?.fileUrl || raw?.presignedUrl || raw?.downloadUrl || ""),
@@ -437,7 +587,7 @@ function normalizeDoctorReportSummary(raw: any, fallbackStatus: "pending" | "rev
     reviewedAt: raw?.reviewedAt || raw?.reviewed_at || raw?.uploadedAt || raw?.lastModified,
     patientName: raw?.patientName || raw?.patient_name,
     reportType: raw?.reportType || raw?.report_type || raw?.type,
-    status: raw?.status || fallbackStatus,
+    status: String(raw?.status || fallbackStatus),
   };
 }
 
@@ -811,3 +961,4 @@ export async function createSupportComplaint(payload: CreateComplaintPayload): P
   
   return await response.json();
 }
+

@@ -263,7 +263,7 @@ export default function DashboardOverview() {
       cardBg: "bg-gradient-to-br from-blue-50/40 to-blue-100/20",
     },
     {
-      title: "Doctors",
+      title: "Healthcare Professionals",
       value: stats.totalDoctors,
       icon: UserCheck,
       trend: "+5",
@@ -338,7 +338,7 @@ export default function DashboardOverview() {
       borderColor: "border-blue-200/50",
     },
     {
-      label: "Invite Doctor",
+      label: "Invite Healthcare Professional",
       icon: UserCheck,
       onClick: () => setShowInviteDoctorModal(true),
       iconBg: "bg-purple-100",
@@ -721,7 +721,7 @@ export default function DashboardOverview() {
         isOpen={showInviteDoctorModal}
         onClose={() => setShowInviteDoctorModal(false)}
         onSuccess={() => {
-          console.log("Doctor invited successfully");
+          console.log("Healthcare professional invited successfully");
         }}
       />
 

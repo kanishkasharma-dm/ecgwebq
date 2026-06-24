@@ -61,7 +61,7 @@ export function WaveformAnalysisShowcase() {
         </p>
       </div>
 
-      <div className="grid items-start gap-6 lg:grid-cols-[1.35fr_1fr]">
+      <div className="grid items-start gap-6 md:grid-cols-1 lg:grid-cols-[1.35fr_1fr]">
         <motion.div
           className="self-start rounded-[32px] border border-white/10 bg-white/5 p-6 shadow-glow backdrop-blur-xl"
           initial={{ opacity: 0, y: 40 }}

@@ -269,7 +269,7 @@ const DoctorDashboardPresentation: React.FC = () => {
             </button>
             <div>
               <h2 className="doctor-brand-title text-lg font-bold text-white">CARDIOX</h2>
-              <p className="doctor-brand-subtitle text-xs text-white/60">Doctor Workspace</p>
+              <p className="doctor-brand-subtitle text-xs text-white/60">Healthcare Professional Workspace</p>
             </div>
           </div>
         </div>
@@ -318,7 +318,7 @@ const DoctorDashboardPresentation: React.FC = () => {
         <div className="mx-auto max-w-7xl px-4 py-8 lg:px-6">
           <div className="mb-6 flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
             <div>
-              <h1 className="doctor-page-title text-3xl font-bold text-white">Doctor Dashboard</h1>
+              <h1 className="doctor-page-title text-3xl font-bold text-white">Healthcare Professional Dashboard</h1>
               <p className="doctor-page-subtitle mt-1 text-sm text-slate-400">Operational view for your assigned ECG work.</p>
             </div>
             <motion.button
@@ -369,10 +369,10 @@ const DoctorDashboardPresentation: React.FC = () => {
                   <div className="space-y-4">
                     <div className="inline-flex items-center gap-2 rounded-full border border-cyan-400/20 bg-cyan-400/10 px-3 py-1 text-xs font-medium uppercase tracking-[0.18em] text-cyan-100">
                       <Stethoscope className="h-3.5 w-3.5" />
-                      Logged-in doctor view
+                      Logged-in healthcare professional view
                     </div>
                     <div>
-                      <h2 className="doctor-card-title text-3xl font-semibold text-white">Welcome, {user?.name || "Doctor"}</h2>
+                      <h2 className="doctor-card-title text-3xl font-semibold text-white">Welcome, {user?.name || "Healthcare Professional"}</h2>
                       <p className="doctor-muted mt-2 text-sm text-slate-300">{formattedDate}</p>
                     </div>
                     <p className="doctor-muted max-w-2xl text-sm leading-7 text-slate-300">
@@ -387,8 +387,8 @@ const DoctorDashboardPresentation: React.FC = () => {
                         <UserCircle2 className="h-9 w-9" />
                       </div>
                       <div>
-                        <h3 className="doctor-card-title text-lg font-semibold text-white">{user?.name || "Doctor"}</h3>
-                        <p className="doctor-muted text-sm text-slate-400">Doctor session</p>
+                        <h3 className="doctor-card-title text-lg font-semibold text-white">{user?.name || "Healthcare Professional"}</h3>
+                        <p className="doctor-muted text-sm text-slate-400">Healthcare professional session</p>
                       </div>
                     </div>
                     {user?.email && (

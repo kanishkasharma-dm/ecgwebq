@@ -199,7 +199,7 @@ export default function DoctorSetupPage() {
               {
                 icon: Stethoscope,
                 title: "Normal login after setup",
-                description: "Doctors sign in later with their own password and doctor JWT.",
+                description: "Healthcare professionals sign in later with their own password and assigned access token.",
               },
             ].map((item) => (
               <div
@@ -289,7 +289,7 @@ export default function DoctorSetupPage() {
                   <div className="space-y-2">
                     <div className="flex items-center gap-2 text-sm text-cyan-100">
                       <Stethoscope className="h-4 w-4" />
-                      Doctor profile
+                      Healthcare professional profile
                     </div>
                     <div className="text-xl font-semibold text-white">{inviteInfo.name}</div>
                     <div className="flex items-center gap-2 text-sm text-slate-200">

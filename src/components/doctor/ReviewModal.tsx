@@ -8,6 +8,10 @@ import { useNotification } from "@/contexts/NotificationContext";
 import { getStoredUser } from "@/lib/auth";
 
 export interface DoctorReport {
+  assignmentId: string;
+  doctorId: string;
+  deviceId: string;
+  status: string;
   key: string;
   fileName: string;
   url: string;
@@ -30,6 +34,7 @@ export const ReviewModal: React.FC<ReviewModalProps> = ({
 }) => {
   const [comments, setComments] = useState("");
   const [doctorId, setDoctorId] = useState("");
+  const [doctorName, setDoctorName] = useState("");
   const [signatureFile, setSignatureFile] = useState<File | null>(null);
   const [signatureDataUrl, setSignatureDataUrl] = useState<string | null>(null);
   const [signatureMode, setSignatureMode] = useState<"upload" | "draw">("draw");
@@ -42,6 +47,7 @@ export const ReviewModal: React.FC<ReviewModalProps> = ({
   const resetState = () => {
     setComments("");
     setDoctorId("");
+    setDoctorName("");
     setSignatureFile(null);
     setSignatureDataUrl(null);
     setSignatureMode("draw");
@@ -61,11 +67,14 @@ export const ReviewModal: React.FC<ReviewModalProps> = ({
     }
   }, [report?.url]);
 
-  // Load saved Doctor ID from localStorage on mount
+  // Load saved healthcare professional ID and name from localStorage on mount
   useEffect(() => {
     const doctorUser = getStoredUser("doctor");
     if (doctorUser?.userId) {
       setDoctorId(doctorUser.userId);
+    }
+    if (doctorUser?.name) {
+      setDoctorName(doctorUser.name);
     }
   }, []);
 
@@ -77,8 +86,12 @@ export const ReviewModal: React.FC<ReviewModalProps> = ({
 
   const handleSubmit = async () => {
     if (!report || !report.url) return;
+    if (!report.assignmentId) {
+      setError("This report assignment is missing. Refresh the report list and try again.");
+      return;
+    }
     if (!doctorId.trim()) {
-      setError("Please enter your Doctor ID before submitting.");
+      setError("Please enter your healthcare professional ID before submitting.");
       return;
     }
     setSubmitting(true);
@@ -88,6 +101,7 @@ export const ReviewModal: React.FC<ReviewModalProps> = ({
       const reviewedBlob = await createReviewedPdf(report.url, {
         comments,
         doctorId: doctorId.trim(),
+        doctorName: doctorName.trim(),
         signatureFile: signatureMode === "upload" ? signatureFile : null,
         signatureDataUrl: signatureMode === "draw" ? signatureDataUrl : null,
       });
@@ -99,8 +113,7 @@ export const ReviewModal: React.FC<ReviewModalProps> = ({
 
       const formData = new FormData();
       formData.append("reviewedPdf", reviewedFile);
-      formData.append("originalFileName", report.fileName);
-      formData.append("doctorId", doctorId.trim());
+      formData.append("assignmentId", report.assignmentId);
 
       await uploadReviewedReport(formData);
 
@@ -214,11 +227,11 @@ export const ReviewModal: React.FC<ReviewModalProps> = ({
               {/* Right: form */}
               <div className="flex flex-col gap-3">
                 <label className="text-xs font-semibold text-slate-700">
-                  Doctor ID
+                  Healthcare Professional ID
                   <input
                     type="text"
                     className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:border-orange-500 focus:outline-none focus:ring-1 focus:ring-orange-500"
-                    placeholder="Doctor ID from current session"
+                    placeholder="Healthcare professional ID from current session"
                     value={doctorId}
                     readOnly
                   />
@@ -322,4 +335,3 @@ export const ReviewModal: React.FC<ReviewModalProps> = ({
     </AnimatePresence>
   );
 };
-

@@ -56,7 +56,7 @@ export function Features() {
           administrators.
         </p>
       </div>
-      <div className="grid gap-6 md:grid-cols-2">
+      <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-2">
         {featureData.map((feature, index) => (
           <motion.div
             key={feature.title}

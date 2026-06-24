@@ -7,7 +7,7 @@ interface RequireRoleProps {
 }
 
 const redirectByRole: Record<AuthRole, string> = {
-  admin: "/login",
+  admin: "/login_admin",
   doctor: "/login",
 };
 

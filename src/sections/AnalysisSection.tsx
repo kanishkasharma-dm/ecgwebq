@@ -42,7 +42,7 @@ export function AnalysisSection() {
         </p>
       </div>
 
-      <div className="grid gap-6 lg:grid-cols-[1.4fr_1fr]">
+      <div className="grid gap-6 md:grid-cols-1 lg:grid-cols-[1.4fr_1fr]">
         <div className="space-y-6">
           <motion.div
             className="rounded-[32px] border border-white/10 bg-white/5 p-6 shadow-glow backdrop-blur-xl"

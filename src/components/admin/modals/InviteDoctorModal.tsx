@@ -57,7 +57,7 @@ export default function InviteDoctorModal({ isOpen, onClose, onSuccess }: Invite
   };
 
   return (
-    <Modal isOpen={isOpen} onClose={onClose} title="Invite Doctor">
+    <Modal isOpen={isOpen} onClose={onClose} title="Invite Healthcare Professional">
       <form onSubmit={handleSubmit} className="space-y-4">
         {error && (
           <div className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
@@ -67,7 +67,7 @@ export default function InviteDoctorModal({ isOpen, onClose, onSuccess }: Invite
 
         <div>
           <label className="mb-1 block text-sm font-medium text-gray-700">
-            Doctor Name <span className="text-red-500">*</span>
+            Healthcare Professional Name <span className="text-red-500">*</span>
           </label>
           <input
             type="text"
@@ -91,7 +91,7 @@ export default function InviteDoctorModal({ isOpen, onClose, onSuccess }: Invite
             onChange={handleChange}
             required
             className="w-full rounded-lg border border-gray-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-orange-500"
-            placeholder="doctor@example.com"
+            placeholder="clinician@example.com"
           />
         </div>
 
@@ -139,7 +139,7 @@ export default function InviteDoctorModal({ isOpen, onClose, onSuccess }: Invite
             A secure invitation email will be sent with a temporary password and a one-time setup link.
           </p>
           <p className="mt-1 text-xs text-sky-700">
-            Doctors complete onboarding by setting their own password. Temporary credentials are not surfaced in the admin UI.
+            Healthcare professionals complete onboarding by setting their own password. Temporary credentials are not surfaced in the admin UI.
           </p>
         </div>
 
