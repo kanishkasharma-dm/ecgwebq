@@ -100,7 +100,7 @@ export default function ReportsLogin() {
             <div className={`hidden md:block rounded-2xl overflow-hidden border ${isDarkMode ? "bg-slate-900 border-slate-700" : "bg-slate-50 border-slate-200"}`}>
               <img
                 src={doctorIllustration || reportImage}
-                alt="Doctor illustration - Medical professional with heart health diagram"
+                alt="Healthcare professional illustration - medical professional with heart health diagram"
                 className="w-full h-full object-contain p-4"
                 onError={(e) => { 
                   // Fallback to report image if doctor illustration fails to load

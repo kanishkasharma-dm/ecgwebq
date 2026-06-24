@@ -141,7 +141,7 @@ export function AdminSection() {
         </div>
       </motion.div>
 
-      <div className="mt-10 grid gap-6 md:grid-cols-2 xl:grid-cols-3">
+      <div className="mt-10 grid gap-6 sm:grid-cols-1 md:grid-cols-2 xl:grid-cols-3">
         {deviceFeatures.map((feature, index) => (
           <motion.div
             key={feature.title}

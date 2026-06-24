@@ -8,7 +8,7 @@ import { motion } from 'framer-motion';
 import { fetchS3Files, fetchS3FileContent, formatFileSize, formatTimestamp, handleApiError } from '../api/ecgApi';
 import { S3File, S3FilesResponse } from '../api/types/ecg';
 
-import { Download, Eye, Search, X, FileText, Loader2 } from 'lucide-react';
+import { Download, Eye, Search, X, FileText, Loader2, AlertCircle } from 'lucide-react';
 
 const S3FileBrowser: React.FC = () => {
   const DEFAULT_PAGE_SIZE = 100;
@@ -23,6 +23,8 @@ const S3FileBrowser: React.FC = () => {
   const [showPreview, setShowPreview] = useState<boolean>(false);
   const [jsonContent, setJsonContent] = useState<any | null>(null);
   const [loadingJson, setLoadingJson] = useState<boolean>(false);
+  const [loadingPdf, setLoadingPdf] = useState<boolean>(false);
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
 
   const getVisiblePages = () => {
     if (!pagination) return [];
@@ -91,13 +93,49 @@ const S3FileBrowser: React.FC = () => {
     setSelectedFile(file);
     setShowPreview(true);
     setJsonContent(null);
+    setPreviewUrl(null);
+    setError('');
 
-    // If it's a JSON file, load its content via API to avoid CORS issues
-    if (file.type === 'application/json') {
-      setLoadingJson(true);
-      setError(''); // Clear any previous errors
+    // Cleanup previous blob URL if any
+    if (previewUrl && previewUrl.startsWith('blob:')) {
+      URL.revokeObjectURL(previewUrl);
+    }
+
+    if (file.type === 'application/pdf') {
+      setLoadingPdf(true);
       try {
-        // Use the API endpoint instead of direct fetch to avoid CORS issues
+        // Fetch PDF as blob to bypass Content-Disposition: attachment
+        // This allows it to be displayed in the iframe instead of triggering a download
+        const response = await fetch(file.url);
+        if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+        const blob = await response.blob();
+        const pdfBlob = new Blob([blob], { type: 'application/pdf' });
+        const blobUrl = URL.createObjectURL(pdfBlob);
+        setPreviewUrl(blobUrl);
+      } catch (err) {
+        console.error('Error fetching PDF blob:', err);
+        // Fallback to direct URL if blob fetch fails
+        setPreviewUrl(file.url);
+      } finally {
+        setLoadingPdf(false);
+      }
+    } else if (file.type === 'application/json') {
+      setLoadingJson(true);
+      try {
+        // Try direct fetch first (faster, avoids proxy issues if CORS allows)
+        try {
+          const response = await fetch(file.url);
+          if (response.ok) {
+            const jsonData = await response.json();
+            setJsonContent(jsonData);
+            setLoadingJson(false);
+            return;
+          }
+        } catch (fetchErr) {
+          console.log('Direct JSON fetch failed, trying proxy...', fetchErr);
+        }
+
+        // Fallback: Use the API endpoint (proxy) to avoid CORS issues
         const jsonData = await fetchS3FileContent(file.key);
         if (jsonData) {
           setJsonContent(jsonData);
@@ -134,9 +172,13 @@ const S3FileBrowser: React.FC = () => {
 
   // Close preview
   const closePreview = () => {
+    if (previewUrl && previewUrl.startsWith('blob:')) {
+      URL.revokeObjectURL(previewUrl);
+    }
     setShowPreview(false);
     setSelectedFile(null);
     setJsonContent(null);
+    setPreviewUrl(null);
     setError(''); // Clear error when closing preview
   };
 
@@ -432,17 +474,26 @@ const S3FileBrowser: React.FC = () => {
                       <p className="text-sm mt-2">{error || 'Unable to preview this JSON file'}</p>
                     </div>
                   )
-                ) : selectedFile.type === 'application/pdf' && selectedFile.url ? (
-                  // ✅ FIX 2: Route PDF preview through backend proxy to avoid preflight CORS errors.
-                  // Instead of passing the raw S3 URL to Google Docs Viewer (which triggers a
-                  // cross-origin preflight from Google's servers to your S3 bucket), we use our
-                  // own backend proxy endpoint. The backend fetches the file from S3 privately
-                  // and streams it back with the correct CORS headers.
-                  <iframe
-                    src={selectedFile.url}
-                    className="w-full h-[600px] border-0 rounded-lg shadow-inner bg-white"
-                    title={selectedFile.name}
-                  />
+                ) : selectedFile.type === 'application/pdf' ? (
+                  // PDF Preview
+                  loadingPdf ? (
+                    <div className="flex flex-col items-center justify-center py-24 bg-white rounded-lg">
+                      <Loader2 className="animate-spin text-blue-600" size={40} />
+                      <p className="text-slate-600 mt-4 font-medium">Preparing PDF preview...</p>
+                    </div>
+                  ) : previewUrl ? (
+                    <iframe
+                      src={previewUrl}
+                      className="w-full h-[600px] border-0 rounded-lg shadow-inner bg-white"
+                      title={selectedFile.name}
+                    />
+                  ) : (
+                    <div className="text-center py-12 bg-white rounded-lg">
+                      <AlertCircle className="w-16 h-16 text-red-500 mx-auto mb-4" />
+                      <p className="text-lg font-medium text-slate-800">Failed to load PDF</p>
+                      <p className="text-sm text-slate-500 mt-2">Could not generate preview for this file</p>
+                    </div>
+                  )
                 ) : (
                   <div className="text-center py-8 text-slate-500">
                     <FileText className="w-16 h-16 text-slate-300 mx-auto mb-4" />

@@ -45,7 +45,7 @@ export function ControlPanel() {
         </Button>
       </div>
 
-      <div className="grid gap-6 lg:grid-cols-[1.35fr_1fr]">
+      <div className="grid gap-6 md:grid-cols-1 lg:grid-cols-[1.35fr_1fr]">
         <motion.div
           className="relative overflow-hidden rounded-[32px] border border-white/10 bg-white/5 p-6 shadow-glow backdrop-blur-xl"
           initial={{ opacity: 0, y: 40 }}
@@ -53,7 +53,7 @@ export function ControlPanel() {
           transition={{ duration: 0.8 }}
           viewport={{ once: true, amount: 0.3 }}
         >
-          <div className="grid gap-4 md:grid-cols-2">
+          <div className="grid gap-4 sm:grid-cols-2">
             <div className="space-y-4">
               <div className="rounded-3xl border border-white/10 bg-slate-950/70 p-4">
                 <div className="relative aspect-[16/10] w-full">

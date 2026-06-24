@@ -30,7 +30,7 @@ export function Hero() {
         <div className="w-full max-w-5xl space-y-5 text-center">
           <h1
             className="font-display leading-tight"
-            style={{ fontSize: "3.5rem" }}
+            style={{ fontSize: "clamp(2rem, 5vw, 3.5rem)" }}
           >
             CardioX by Deckmount
           </h1>

@@ -74,6 +74,10 @@ export const DoctorReportsPage: React.FC = () => {
 
   const reviewedSummary: DoctorReportSummary = {
   id: reviewedReport.key,
+  assignmentId: reviewedReport.assignmentId,
+  doctorId: reviewedReport.doctorId,
+  deviceId: reviewedReport.deviceId,
+  status: "reviewed",
   key: reviewedReport.key,
   fileName: reviewedReport.fileName,
   url: updatedUrl, 
@@ -230,7 +234,7 @@ export const DoctorReportsPage: React.FC = () => {
                 <FileText className="h-5 w-5" />
               </div>
               <div>
-                <h1 className="doctor-page-title text-2xl font-bold">Doctor Reports</h1>
+                <h1 className="doctor-page-title text-2xl font-bold">Healthcare Professional Reports</h1>
                 <p className="doctor-page-subtitle text-xs text-slate-400">
                   Review uploaded ECG PDF reports and submit your findings.
                 </p>

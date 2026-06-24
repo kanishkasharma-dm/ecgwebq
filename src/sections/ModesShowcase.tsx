@@ -96,7 +96,7 @@ export function ModesShowcase() {
             viewport={{ once: true, amount: 0.2 }}
             className="rounded-[36px] border border-white/10 bg-white/5 p-6 shadow-glow backdrop-blur-xl"
           >
-            <div className="grid gap-8 lg:grid-cols-[0.9fr_1.4fr]">
+            <div className="grid gap-8 md:grid-cols-1 lg:grid-cols-[0.9fr_1.4fr]">
               <div className="space-y-5">
                 <div>
                   <Badge variant="neutral" className="tracking-[0.3em]">
@@ -118,7 +118,7 @@ export function ModesShowcase() {
                 </div>
               </div>
 
-              <div className="grid gap-6 xl:grid-cols-3">
+              <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
                 {group.variants.map((variant, variantIndex) => (
                   <motion.div
                     key={variant.title}

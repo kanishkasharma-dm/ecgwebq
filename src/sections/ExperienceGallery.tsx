@@ -62,7 +62,7 @@ export function ExperienceGallery() {
           and analysis.
         </p>
       </div>
-      <div className="grid gap-6 lg:grid-cols-2">
+      <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-2">
         {galleryItems.map((item, index) => (
           <motion.div
             key={item.title}
