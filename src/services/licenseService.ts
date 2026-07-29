@@ -1,4 +1,4 @@
-import { trimTrailingSlashes } from "@/lib/apiBase";
+import { getLicenseApiBase, joinApiUrl } from "@/lib/apiBase";
 
 export type LicenseTier = "Trial" | "Standard" | "Professional" | "Enterprise";
 
@@ -7,13 +7,24 @@ export interface LicenseRecord {
   licenseKey: string;
   backupKey?: string | null;
   tier: string;
-  status: "active" | "revoked";
+  status: "active" | "revoked" | "unused";
+  fullName?: string | null;
+  doctorName?: string | null;
+  orgName?: string | null;
+  orgAddress?: string | null;
+  phone?: string | null;
+  pcName?: string | null;
+  windowsVersion?: string | null;
+  machineSerialId?: string | null;
+  rhythmultaSerial?: string | null;
+  boundFingerprint?: string | null;
   machineName?: string | null;
   machineHost?: string | null;
   machineOs?: string | null;
   machineId?: string | null;
   activatedAt?: string | null;
   lastSeenAt?: string | null;
+  lastHeartbeat?: string | null;
   createdAt?: string | null;
   customerNotes?: string | null;
   activationCount?: number;
@@ -37,11 +48,9 @@ export interface CreateLicensePayload {
   customerNotes: string;
 }
 
-const LICENSE_API_BASE_URL = trimTrailingSlashes(
-  import.meta.env.VITE_LICENSE_API_BASE_URL ||
-    "https://m4qoae4d8e.execute-api.us-east-1.amazonaws.com/prod"
-);
 const LICENSE_ADMIN_TOKEN = "deckmount_admin_2026_secure";
+const ADMIN_API = "https://m4qoae4d8e.execute-api.us-east-1.amazonaws.com/prod";
+const VIEW_API = "https://zkipk0rhd8.execute-api.us-east-1.amazonaws.com/prod";
 
 function getLicenseAdminToken(): string {
   return (import.meta.env.VITE_LICENSE_ADMIN_TOKEN || LICENSE_ADMIN_TOKEN).trim();
@@ -50,53 +59,12 @@ function getLicenseAdminToken(): string {
 function buildLicenseHeaders(): HeadersInit {
   return {
     "Content-Type": "application/json",
-    "X-Admin-Token": getLicenseAdminToken(),
+    "x-admin-token": getLicenseAdminToken(),
   };
 }
 
-async function licenseApiPost<T>(endpoint: string, body: Record<string, unknown>): Promise<T> {
-  const response = await fetch(`${LICENSE_API_BASE_URL}${endpoint}`, {
-    method: "POST",
-    headers: buildLicenseHeaders(),
-    body: JSON.stringify(body),
-  });
-
-  const contentType = response.headers.get("content-type");
-  const payload = contentType?.includes("application/json") ? await response.json() : await response.text();
-  const payloadRecord = asRecord(payload);
-  const errorRecord = asRecord(payloadRecord.error);
-  const errorMessage =
-    pickString(errorRecord, ["message"]) ||
-    pickString(payloadRecord, ["message", "error"]) ||
-    response.statusText;
-
-  if (!response.ok || payloadRecord.success === false) {
-    throw new Error(errorMessage || "License API request failed");
-  }
-
-  return payload as T;
-}
-
-async function licenseApiGet<T>(endpoint: string): Promise<T> {
-  const response = await fetch(`${LICENSE_API_BASE_URL}${endpoint}`, {
-    method: "GET",
-    headers: buildLicenseHeaders(),
-  });
-
-  const contentType = response.headers.get("content-type");
-  const payload = contentType?.includes("application/json") ? await response.json() : await response.text();
-  const payloadRecord = asRecord(payload);
-  const errorRecord = asRecord(payloadRecord.error);
-  const errorMessage =
-    pickString(errorRecord, ["message"]) ||
-    pickString(payloadRecord, ["message", "error"]) ||
-    response.statusText;
-
-  if (!response.ok || payloadRecord.success === false) {
-    throw new Error(errorMessage || "License API request failed");
-  }
-
-  return payload as T;
+function licenseApiUrl(endpoint: string): string {
+  return joinApiUrl(getLicenseApiBase(), endpoint);
 }
 
 function asRecord(value: unknown): Record<string, unknown> {
@@ -194,6 +162,7 @@ function normalizeStatus(source: Record<string, unknown>): LicenseRecord["status
   const explicit = pickString(source, ["status", "licenseStatus", "state"]);
   if (explicit) {
     const lower = explicit.toLowerCase();
+    if (lower.includes("unused") || lower.includes("inactive") || lower.includes("pending")) return "unused";
     if (lower.includes("revoked")) return "revoked";
     if (lower.includes("active") || lower.includes("valid")) return "active";
   }
@@ -208,6 +177,34 @@ function normalizeLicense(value: unknown): LicenseRecord {
   const source = asRecord(value);
   const nestedMachine = asRecord(source.machine_binding || source.machine || source.binding || source.activation);
   const licenseKey = pickString(source, ["licenseKey", "license_key", "key", "license", "id"]) || "";
+  const fullName =
+    pickString(source, ["fullName", "full_name"]) ||
+    pickString(nestedMachine, ["fullName", "full_name"]);
+  const doctorName =
+    pickString(source, ["doctorName", "doctor_name"]) ||
+    pickString(nestedMachine, ["doctorName", "doctor_name"]);
+  const orgName =
+    pickString(source, ["orgName", "org_name"]) ||
+    pickString(nestedMachine, ["orgName", "org_name"]);
+  const orgAddress =
+    pickString(source, ["orgAddress", "org_address"]) ||
+    pickString(nestedMachine, ["orgAddress", "org_address"]);
+  const phone = pickString(source, ["phone"]) || pickString(nestedMachine, ["phone"]);
+  const pcName =
+    pickString(source, ["pcName", "pc_name"]) ||
+    pickString(nestedMachine, ["pcName", "pc_name", "name"]);
+  const windowsVersion =
+    pickString(source, ["windowsVersion", "windows_version"]) ||
+    pickString(nestedMachine, ["windowsVersion", "windows_version"]);
+  const machineSerialId =
+    pickString(source, ["machineSerialId", "machine_serial_id"]) ||
+    pickString(nestedMachine, ["machineSerialId", "machine_serial_id"]);
+  const rhythmultaSerial =
+    pickString(source, ["rhythmultaSerial", "rhythmulta_serial"]) ||
+    pickString(nestedMachine, ["rhythmultaSerial", "rhythmulta_serial"]);
+  const boundFingerprint =
+    pickString(source, ["boundFingerprint", "bound_fingerprint", "fingerprint"]) ||
+    pickString(nestedMachine, ["boundFingerprint", "bound_fingerprint", "fingerprint"]);
 
   return {
     id: pickString(source, ["id", "licenseId", "license_id"]) || licenseKey,
@@ -215,16 +212,29 @@ function normalizeLicense(value: unknown): LicenseRecord {
     backupKey: pickString(source, ["backupKey", "backup_key"]),
     tier: normalizeTier(pickString(source, ["tier_name", "tierName", "tier", "plan", "licenseTier"])),
     status: normalizeStatus(source),
+    fullName,
+    doctorName,
+    orgName,
+    orgAddress,
+    phone,
+    pcName,
+    windowsVersion,
+    machineSerialId,
+    rhythmultaSerial,
+    boundFingerprint,
     machineName:
+      pcName ||
       pickString(source, ["machineName", "machine_name", "deviceName"]) ||
       pickString(nestedMachine, ["name", "machineName", "machine_name", "deviceName"]),
     machineHost:
       pickString(source, ["machineHost", "machine_host", "host", "hostname"]) ||
       pickString(nestedMachine, ["host", "hostname", "machineHost", "machine_host"]),
     machineOs:
+      windowsVersion ||
       pickString(source, ["machineOs", "machineOS", "machine_os"]) ||
       pickString(nestedMachine, ["machineOs", "machineOS", "machine_os"]),
     machineId:
+      machineSerialId ||
       pickString(source, ["machineId", "machine_id", "deviceId", "fingerprint", "hardware_fingerprint"]) ||
       pickString(nestedMachine, ["id", "machineId", "machine_id", "deviceId", "fingerprint", "hardware_fingerprint"]),
     activatedAt: normalizeTimestamp(
@@ -232,9 +242,10 @@ function normalizeLicense(value: unknown): LicenseRecord {
         pickString(nestedMachine, ["activatedAt", "activated_at"])
     ),
     lastSeenAt: normalizeTimestamp(
-      pickString(source, ["lastSeenAt", "last_seen"]) ||
+      pickString(source, ["lastSeenAt", "last_seen", "last_heartbeat"]) ||
         pickString(nestedMachine, ["lastSeenAt", "last_seen"])
     ),
+    lastHeartbeat: normalizeTimestamp(pickString(source, ["last_heartbeat", "lastHeartbeat"]) || null),
     createdAt: normalizeTimestamp(pickString(source, ["createdAt", "created_at", "issuedAt", "issued_at"])),
     customerNotes: pickString(source, ["customerNotes", "notes", "customerName", "customer"]),
     activationCount: pickNumber(source, ["activationCount", "activation_count"]),
@@ -259,25 +270,191 @@ function normalizeActivation(value: unknown): LicenseActivation {
 }
 
 export async function fetchLicenses(): Promise<LicenseRecord[]> {
-  const response = await licenseApiGet<unknown>("/admin/licenses");
-  return unwrapList<unknown>(response, ["records", "licenses", "items", "rows"]).map(normalizeLicense);
+  const response = await fetch(licenseApiUrl("/seats"), {
+    method: "GET",
+    headers: buildLicenseHeaders(),
+  });
+
+  const payload = await parseJsonPayload(response);
+  if (!response.ok) {
+    throw new Error(extractApiError(payload) || "Failed to fetch licenses");
+  }
+
+  const seats = unwrapList<unknown>(payload, ["seats", "records", "licenses", "items", "rows"]);
+  return seats.map(normalizeSeatRecord);
 }
 
 export async function createLicense(payload: CreateLicensePayload): Promise<LicenseRecord> {
-  const response = await licenseApiPost<unknown>("/admin/create", {
-    tier: payload.tier,
-    customerNotes: payload.customerNotes,
-    notes: payload.customerNotes,
-    expiry: 0,
+  const response = await fetch(joinApiUrl(ADMIN_API, "/admin/create"), {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "x-admin-token": getLicenseAdminToken(),
+    },
+    body: JSON.stringify({
+      tier: payload.tier,
+      expiry: 0,
+      notes: payload.customerNotes || "Admin generated",
+      created_for: payload.customerNotes || "Admin",
+      plan_type: "single",
+      valid_until: "2027-12-31",
+    }),
   });
 
-  return normalizeLicense(asRecord(response).license || response);
+  const payloadJson = await parseJsonPayload(response);
+  if (!response.ok || payloadJson.success === false) {
+    throw new Error(extractApiError(payloadJson) || "Failed to create license");
+  }
+
+  const license = asRecord(payloadJson).license || payloadJson;
+  return normalizeLicense(license);
 }
 
 export async function revokeLicense(licenseKey: string): Promise<void> {
-  await licenseApiPost<unknown>("/admin/revoke", { licenseKey });
+  const response = await fetch(joinApiUrl(ADMIN_API, "/admin/revoke"), {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "x-admin-token": getLicenseAdminToken(),
+    },
+    body: JSON.stringify({ license_key: licenseKey }),
+  });
+
+  const payload = await parseJsonPayload(response);
+  if (!response.ok || payload.success === false) {
+    throw new Error(extractApiError(payload) || "Failed to revoke license");
+  }
+}
+
+export async function unrevokeLicense(licenseKey: string): Promise<void> {
+  const response = await fetch(joinApiUrl(ADMIN_API, "/admin/unrevoke"), {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "x-admin-token": getLicenseAdminToken(),
+    },
+    body: JSON.stringify({ license_key: licenseKey }),
+  });
+
+  const payload = await parseJsonPayload(response);
+  if (!response.ok || payload.success === false) {
+    throw new Error(extractApiError(payload) || "Failed to unrevoke");
+  }
+}
+
+export async function deleteSeat(licenseKey: string): Promise<void> {
+  const response = await fetch(joinApiUrl(VIEW_API, "/seats/delete"), {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "x-admin-token": getLicenseAdminToken(),
+    },
+    body: JSON.stringify({ license_key: licenseKey }),
+  });
+
+  const payload = await parseJsonPayload(response);
+  if (!response.ok || payload.success === false) {
+    throw new Error(extractApiError(payload) || "Failed to delete seat");
+  }
+}
+
+export function exportLicensesToCSV(licenses: LicenseRecord[]): void {
+  const headers = [
+    "License Key",
+    "Status",
+    "Full Name",
+    "Org",
+    "Phone",
+    "PC Name",
+    "Machine Serial",
+    "RhythmUlta Serial",
+    "Activated At",
+  ];
+
+  const quote = (value: unknown): string => `"${String(value ?? "").replace(/"/g, '""')}"`;
+  const rows = licenses.map((license) => [
+    license.licenseKey,
+    license.status,
+    license.fullName,
+    license.orgName,
+    license.phone,
+    license.pcName,
+    license.machineSerialId,
+    license.rhythmultaSerial,
+    license.activatedAt ? new Date(license.activatedAt).toLocaleDateString("en-IN") : "-",
+  ]);
+
+  const csv = [headers, ...rows].map((row) => row.map(quote).join(",")).join("\n");
+  const blob = new Blob([csv], { type: "text/csv" });
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = `cardiox_licenses_${new Date().toISOString().split("T")[0]}.csv`;
+  anchor.click();
+  URL.revokeObjectURL(url);
 }
 
 export async function fetchLicenseActivations(): Promise<LicenseActivation[]> {
-  return [];
+  const response = await fetch(licenseApiUrl("/seats"), {
+    method: "GET",
+    headers: buildLicenseHeaders(),
+  });
+
+  const payload = await parseJsonPayload(response);
+  if (!response.ok) {
+    throw new Error(extractApiError(payload) || "Failed to fetch activations");
+  }
+
+  const seats = unwrapList<unknown>(payload, ["seats", "records", "licenses", "items", "rows"]);
+  return seats.map(normalizeActivation);
+}
+
+function normalizeSeatRecord(value: unknown): LicenseRecord {
+  const source = asRecord(value);
+  return {
+    ...normalizeLicense(source),
+    status: normalizeStatus(source),
+    licenseKey: pickString(source, ["license_key", "licenseKey"]) || "",
+    fullName: pickString(source, ["full_name", "fullName"]),
+    doctorName: pickString(source, ["doctor_name", "doctorName"]),
+    orgName: pickString(source, ["org_name", "orgName"]),
+    orgAddress: pickString(source, ["org_address", "orgAddress"]),
+    phone: pickString(source, ["phone"]),
+    pcName: pickString(source, ["pc_name", "pcName"]),
+    windowsVersion: pickString(source, ["windows_version", "windowsVersion"]),
+    machineSerialId: pickString(source, ["machine_serial_id", "machineSerialId"]),
+    rhythmultaSerial: pickString(source, ["rhythmulta_serial", "rhythmultaSerial"]),
+    boundFingerprint: pickString(source, ["bound_fingerprint", "boundFingerprint"]),
+    machineName: pickString(source, ["pc_name", "pcName"]) || pickString(source, ["machineName", "machine_name"]),
+    machineHost: pickString(source, ["pc_name", "pcName"]) || pickString(source, ["machineHost", "machine_host"]),
+    machineOs: pickString(source, ["windows_version", "windowsVersion"]) || pickString(source, ["machineOs", "machineOS"]),
+    machineId: pickString(source, ["machine_serial_id", "machineSerialId"]) || pickString(source, ["machineId", "machine_id"]),
+    activatedAt: normalizeTimestamp(pickString(source, ["activated_at", "activatedAt"])),
+    lastHeartbeat: normalizeTimestamp(pickString(source, ["last_heartbeat", "lastHeartbeat"])),
+    lastSeenAt: normalizeTimestamp(pickString(source, ["last_heartbeat", "lastHeartbeat", "last_seen", "lastSeenAt"])),
+    createdAt: normalizeTimestamp(pickString(source, ["activated_at", "created_at", "createdAt"])),
+    raw: source,
+  };
+}
+
+async function parseJsonPayload(response: Response): Promise<any> {
+  const contentType = response.headers.get("content-type");
+  if (contentType?.includes("application/json")) {
+    return response.json();
+  }
+  const text = await response.text();
+  try {
+    return JSON.parse(text);
+  } catch {
+    return { message: text };
+  }
+}
+
+function extractApiError(payload: unknown): string | null {
+  const record = asRecord(payload);
+  return (
+    pickString(asRecord(record.error), ["message"]) ||
+    pickString(record, ["message", "error"]) ||
+    null
+  );
 }

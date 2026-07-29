@@ -62,6 +62,18 @@ export function getDoctorApiBase(): string {
   );
 }
 
+export function getLicenseApiBase(): string {
+  if (import.meta.env.DEV) {
+    return "/__license_api";
+  }
+
+  return trimTrailingSlashes(
+    import.meta.env.VITE_LICENSE_API_BASE ||
+    import.meta.env.VITE_LICENSE_API_BASE_URL ||
+    "https://zkipk0rhd8.execute-api.us-east-1.amazonaws.com/prod"
+  );
+}
+
 export function joinApiUrl(base: string, path: string): string {
   return `${trimTrailingSlashes(base)}${normalizePath(path)}`;
 }

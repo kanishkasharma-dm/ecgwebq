@@ -42,8 +42,16 @@ export default defineConfig(({ mode }) => {
           secure: true,
           rewrite: (requestPath) => requestPath.replace(/^\/__doctor_api/, ""),
         },
+        "/__license_api": {
+          target:
+            env.VITE_LICENSE_API_BASE ||
+            env.VITE_LICENSE_API_BASE_URL ||
+            "https://zkipk0rhd8.execute-api.us-east-1.amazonaws.com/prod",
+          changeOrigin: true,
+          secure: true,
+          rewrite: (requestPath) => requestPath.replace(/^\/__license_api/, ""),
+        },
       }
     }
   };
 });
-
